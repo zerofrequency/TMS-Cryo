@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Local environment and keys
+.env
+.env.*
+supabase-config.js
+
+# Personal imported/exported data
+data/carrier-appointments.json
+*.csv
+*.xlsx
+*.xls
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/

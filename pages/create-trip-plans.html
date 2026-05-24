@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Trip Plans</title>
+    <link rel="stylesheet" href="../styles/trip-plans.css" />
+  </head>
+  <body>
+    <main class="trip-shell">
+      <header class="trip-header">
+        <div>
+          <a class="back-link" href="./trip-plans.html">Trip Plans</a>
+          <h1>Create Trip Plans</h1>
+          <p>Create and review outbound plans linked to Amazon appointments or private-address stops.</p>
+        </div>
+        <div class="cloud-pill" id="cloudStatus">Checking Supabase</div>
+      </header>
+
+      <section class="planner-layout">
+        <form id="tripForm" class="plan-form">
+          <div class="form-title">
+            <h2>Create Trip Plan</h2>
+            <p>ETA uses AM = 12:00 and PM = 18:00.</p>
+          </div>
+
+          <div class="form-grid">
+            <label>
+              Plan Name
+              <input id="planName" type="text" placeholder="Example: Fontana outbound" />
+            </label>
+            <label>
+              Plan Type
+              <select id="planType">
+                <option value="Single Drop" data-stops="1">Single Drop</option>
+                <option value="Two Drops" data-stops="2">Two Drops</option>
+                <option value="Three Drops" data-stops="3">Three Drops</option>
+                <option value="Four Drops" data-stops="4">Four Drops</option>
+              </select>
+            </label>
+            <label>
+              Plan Date
+              <input id="planDate" type="date" />
+            </label>
+            <label>
+              ETA Date
+              <input id="etaDate" type="date" required />
+            </label>
+            <label>
+              ETA Period
+              <select id="etaPeriod">
+                <option value="AM">AM · 12:00</option>
+                <option value="PM">PM · 18:00</option>
+              </select>
+            </label>
+            <label>
+              Transport
+              <input id="transportMode" type="text" placeholder="Truck, team, solo..." />
+            </label>
+          </div>
+
+          <section class="stops-section">
+            <div class="section-head">
+              <h2>Stops</h2>
+              <p>Bind an existing ISA or enter a private-address appointment manually.</p>
+            </div>
+            <div id="stopsContainer" class="stops-container"></div>
+          </section>
+
+          <label>
+            Notes
+            <textarea id="planNotes" rows="3" placeholder="Dispatch notes..."></textarea>
+          </label>
+
+          <div class="form-actions">
+            <button class="button primary" type="submit">Save Trip Plan</button>
+            <button id="clearFormButton" class="button" type="button">Clear</button>
+          </div>
+        </form>
+
+        <section class="calendar-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Appointment Calendar</h2>
+              <p id="calendarSummary">No appointments loaded</p>
+            </div>
+            <div class="calendar-nav">
+              <button id="prevMonthButton" class="button compact neutral" type="button" aria-label="Previous month">&lt;</button>
+              <strong id="calendarTitle"></strong>
+              <button id="nextMonthButton" class="button compact neutral" type="button" aria-label="Next month">&gt;</button>
+            </div>
+          </div>
+          <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="stopTemplate">
+      <article class="stop-card">
+        <div class="stop-head">
+          <h3></h3>
+          <span class="buffer-pill">Buffer --</span>
+        </div>
+        <div class="stop-grid">
+          <label>
+            Stop Source
+            <select class="stop-source" required>
+              <option value="appointment">Existing Appointment</option>
+              <option value="private">Private Address</option>
+            </select>
+          </label>
+          <label class="appointment-field">
+            ISA
+            <input class="stop-isa" type="search" autocomplete="off" placeholder="Search ISA / FC" required />
+            <datalist class="stop-isa-options"></datalist>
+          </label>
+          <label class="private-field hidden">
+            Manual ISA / Ref
+            <input class="manual-isa" type="text" />
+          </label>
+          <label>
+            Destination
+            <input class="stop-destination" type="text" required />
+          </label>
+          <label>
+            Appointment Time
+            <input class="stop-schedule" type="text" placeholder="MM/DD/YYYY HH:mm TZ" required />
+          </label>
+          <label>
+            Transit Days
+            <input class="stop-transit" type="number" min="0" step="0.01" />
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <div id="appointmentModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-hidden="true">
+      <section class="modal-panel">
+        <header class="modal-head">
+          <div>
+            <h2 id="appointmentModalTitle">Appointment Details</h2>
+            <p id="appointmentModalSubtitle"></p>
+          </div>
+          <button id="closeAppointmentModal" class="button compact neutral" type="button" aria-label="Close appointment details">Close</button>
+        </header>
+        <div id="appointmentModalBody" class="modal-body"></div>
+      </section>
+    </div>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/trip-plans.js"></script>
+  </body>
+</html>

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carrier Appointment Manager</title>
+    <link rel="stylesheet" href="./styles/appointments.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Appointments</h1>
+          <p>Personal Amazon Carrier Central appointment tracker</p>
+        </div>
+        <div class="actions">
+          <label class="button primary">
+            Upload CSV/XLSX
+            <input id="fileInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+          </label>
+          <button id="addManualButton" class="button" type="button">Add Manually</button>
+          <a class="button" href="./index.html">Home</a>
+          <a class="button" href="./pages/fc-dashboard.html">Hot FCs</a>
+          <a class="button" href="./pages/trip-plans.html">Trip Plans</a>
+          <button id="exportButton" class="button" type="button">Export CSV</button>
+        </div>
+      </header>
+
+      <section class="stats" aria-label="Appointment summary">
+        <article>
+          <span>Total</span>
+          <strong id="totalCount">0</strong>
+        </article>
+        <article>
+          <span>Upcoming</span>
+          <strong id="upcomingCount">0</strong>
+        </article>
+        <article>
+          <span>Today</span>
+          <strong id="todayCount">0</strong>
+        </article>
+        <article>
+          <span>Issues</span>
+          <strong id="issueCount">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <aside class="filters" aria-label="Filters">
+          <label>
+            Search
+            <input id="searchInput" type="search" placeholder="ISA, FC, status, reference..." />
+          </label>
+          <label>
+            FC
+            <select id="fcFilter">
+              <option value="">All FCs</option>
+            </select>
+          </label>
+          <label>
+            Status
+            <select id="statusFilter">
+              <option value="">All statuses</option>
+            </select>
+          </label>
+          <label>
+            Load Type
+            <select id="loadTypeFilter">
+              <option value="">All load types</option>
+            </select>
+          </label>
+          <label>
+            From
+            <input id="fromDate" type="date" />
+          </label>
+          <label>
+            To
+            <input id="toDate" type="date" />
+          </label>
+          <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
+        </aside>
+
+        <section class="table-panel" aria-label="Appointment list">
+          <div class="table-header">
+            <div>
+              <h2>Appointment List</h2>
+              <p id="resultCount">No records</p>
+              <div class="compact-clocks" aria-label="Current time zones">
+                <span>CN <strong id="chinaClock">--</strong></span>
+                <span>LA <strong id="laClock">--</strong></span>
+                <span>NY <strong id="nyClock">--</strong></span>
+              </div>
+            </div>
+            <div class="view-controls" aria-label="View mode">
+              <button id="tableViewButton" class="view-button active" type="button">Table</button>
+              <button id="calendarViewButton" class="view-button" type="button">Calendar</button>
+            </div>
+            <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Configure Supabase for cloud sync.</div>
+          </div>
+          <div id="importChanges" class="import-changes hidden"></div>
+          <div id="tableView" class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-sort="appointmentId">ISA</th>
+                  <th data-sort="fc">FC</th>
+                  <th data-sort="status">Status</th>
+                  <th data-sort="scheduleTime">Schedule Time</th>
+                  <th data-sort="laTime">Los Angeles Time</th>
+                  <th data-sort="crdd">CRDD</th>
+                  <th data-sort="loadType">Load Type</th>
+                </tr>
+              </thead>
+              <tbody id="appointmentRows"></tbody>
+            </table>
+          </div>
+          <div id="calendarView" class="calendar-view hidden">
+            <div class="calendar-toolbar">
+              <button id="prevMonthButton" class="icon-button" type="button" aria-label="Previous month">&lt;</button>
+              <strong id="calendarTitle"></strong>
+              <button id="nextMonthButton" class="icon-button" type="button" aria-label="Next month">&gt;</button>
+            </div>
+            <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <h3>No appointments loaded</h3>
+            <p>Upload an Amazon Carrier Central CSV or XLSX download to begin.</p>
+          </div>
+        </section>
+
+        <aside class="detail-panel" aria-label="Appointment detail">
+          <div id="detailEmpty" class="detail-empty">
+            <h2>Details</h2>
+            <p>Select an appointment to edit load type, status, and notes.</p>
+          </div>
+          <form id="detailForm" class="detail-form hidden">
+            <div class="detail-title">
+              <div>
+                <span id="detailFc" class="fc-badge"></span>
+                <h2 id="detailId"></h2>
+              </div>
+              <button id="deleteRecord" class="icon-button" type="button" aria-label="Delete appointment">Delete</button>
+            </div>
+
+            <label>
+              Status
+              <input id="detailStatus" type="text" />
+            </label>
+            <label>
+              Load Type
+              <select id="detailLoadType"></select>
+            </label>
+            <label>
+              CRDD
+              <input id="detailCrdd" type="text" />
+            </label>
+            <label>
+              Schedule Time
+              <input id="detailSchedule" type="text" />
+            </label>
+            <label>
+              Notes
+              <textarea id="detailNotes" rows="5" placeholder="Personal notes..."></textarea>
+            </label>
+
+            <dl class="meta">
+              <div>
+                <dt>Reference</dt>
+                <dd id="detailReference"></dd>
+              </div>
+              <div>
+                <dt>Trailer</dt>
+                <dd id="detailTrailer"></dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd id="detailSource"></dd>
+              </div>
+              <div>
+                <dt>Last updated</dt>
+                <dd id="detailUpdated"></dd>
+              </div>
+            </dl>
+            <section class="change-log">
+              <h3>Change Log</h3>
+              <div id="detailChangeLog" class="change-log-list"></div>
+            </section>
+          </form>
+        </aside>
+      </section>
+
+      <section id="manualPanel" class="manual-panel hidden" aria-label="Manual appointment entry" aria-modal="true" role="dialog">
+        <div class="manual-card" role="document">
+          <div class="manual-header">
+            <div>
+              <h2>Add Appointment Manually</h2>
+              <p>Enter appointment fields and save. Existing ISA records are updated.</p>
+            </div>
+            <button id="closeManualButton" class="icon-button" type="button">Close</button>
+          </div>
+          <div class="manual-fields">
+            <label>ISA<input id="manualIsa" type="text" /></label>
+            <label>FC<input id="manualFc" type="text" /></label>
+            <label>Status<input id="manualStatus" type="text" /></label>
+            <label>Schedule Time<input id="manualSchedule" type="text" placeholder="MM/DD/YYYY HH:mm TZ" /></label>
+            <label>CRDD<input id="manualCrdd" type="text" placeholder="MM/DD/YYYY HH:mm TZ" /></label>
+            <label>Load Type<select id="manualLoadType"></select></label>
+            <label>Reference<input id="manualReference" type="text" /></label>
+            <label>Trailer<input id="manualTrailer" type="text" /></label>
+          </div>
+          <div class="manual-actions">
+            <button id="saveManualButton" class="button primary" type="button">Save appointment</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./supabase-config.js"></script>
+    <script src="./scripts/appointments.js"></script>
+  </body>
+</html>

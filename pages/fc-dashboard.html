@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hot FC Weekly Appointments</title>
+    <link rel="stylesheet" href="../styles/fc-dashboard.css" />
+  </head>
+  <body>
+    <main class="fc-shell">
+      <header class="fc-header">
+        <div>
+          <a class="back-link" href="../appts.html">Appointments</a>
+          <h1>Hot FC Weekly Appointments</h1>
+          <p>Weekly appointment status for frequently used Amazon FCs.</p>
+        </div>
+        <div class="cloud-pill" id="cloudStatus">Checking Supabase</div>
+      </header>
+
+      <section class="control-panel" aria-label="Weekly controls">
+        <label>
+          Week
+          <input id="weekInput" type="week" />
+          <span id="weekLabel" class="week-label">--</span>
+        </label>
+        <label>
+          FC
+          <select id="fcSelect"></select>
+        </label>
+        <label class="status-field">
+          Appointment Status
+          <select id="appointmentStatus">
+            <option value="">No status / hide</option>
+            <option value="Normal">正常预约</option>
+            <option value="Slightly Busy">轻微拥挤</option>
+            <option value="Very Busy">十分拥挤</option>
+            <option value="Severely Full">严重爆仓</option>
+          </select>
+        </label>
+        <button id="saveStatusButton" class="button primary" type="button">Update Week</button>
+      </section>
+
+      <section class="view-strip" aria-label="View controls">
+        <div>
+          <h2>FC List</h2>
+          <p id="summaryText">No week selected</p>
+        </div>
+        <div class="view-buttons">
+          <button id="listViewButton" class="view-button active" type="button">List</button>
+          <button id="mapViewButton" class="view-button" type="button">Map</button>
+        </div>
+      </section>
+
+      <section id="listView" class="list-panel" aria-label="Hot FC list">
+        <table>
+          <thead>
+            <tr>
+              <th>FC</th>
+              <th>State</th>
+              <th>City</th>
+              <th>Transit Days</th>
+              <th>Weekly Appointment Status</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody id="fcRows"></tbody>
+        </table>
+        <div id="emptyState" class="empty-state">No FC base data loaded.</div>
+      </section>
+
+      <section id="mapView" class="map-panel hidden" aria-label="Hot FC map">
+        <div class="map-stage">
+          <div class="map-controls" aria-label="Map zoom controls">
+            <button id="zoomInButton" class="map-control-button" type="button" aria-label="Zoom in">+</button>
+            <button id="zoomOutButton" class="map-control-button" type="button" aria-label="Zoom out">-</button>
+            <button id="zoomResetButton" class="map-control-button reset" type="button">Reset</button>
+          </div>
+          <div id="mapCanvas" class="map-canvas"></div>
+        </div>
+        <section class="map-legend-panel" aria-label="Map legend">
+          <h2>Map Legend</h2>
+          <p id="mapSummary">Only FCs with a weekly appointment status are shown.</p>
+          <div id="mapLegend" class="map-legend"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="../data/us-states-contiguous.js"></script>
+    <script src="../scripts/fc-dashboard.js"></script>
+  </body>
+</html>

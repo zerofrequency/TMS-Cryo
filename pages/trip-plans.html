@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trip Plans</title>
+    <link rel="stylesheet" href="../styles/appointments.css" />
+    <link rel="stylesheet" href="../styles/trip-plans-list.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Trip Plans</h1>
+          <p>Review outbound plans, stops, ETA, and appointment buffers.</p>
+        </div>
+        <div class="actions">
+          <a class="button" href="../appts.html">Appointments</a>
+          <a class="button" href="../index.html">Home</a>
+          <a class="button primary" href="./create-trip-plans.html">Create Trip Plan</a>
+        </div>
+      </header>
+
+      <section class="stats" aria-label="Trip plan summary">
+        <article>
+          <span>Total</span>
+          <strong id="totalCount">0</strong>
+        </article>
+        <article>
+          <span>Active</span>
+          <strong id="activeCount">0</strong>
+        </article>
+        <article>
+          <span>In Transit</span>
+          <strong id="inTransitCount">0</strong>
+        </article>
+        <article>
+          <span>Issues</span>
+          <strong id="issueCount">0</strong>
+        </article>
+      </section>
+
+      <section class="workspace trip-plan-workspace">
+        <aside class="filters" aria-label="Trip plan filters">
+          <label>
+            Search
+            <input id="searchInput" type="search" placeholder="Plan, ISA, destination..." />
+          </label>
+          <label>
+            Status
+            <select id="statusFilter">
+              <option value="">All statuses</option>
+            </select>
+          </label>
+          <label>
+            Plan Type
+            <select id="typeFilter">
+              <option value="">All types</option>
+            </select>
+          </label>
+          <label>
+            ETA From
+            <input id="fromDate" type="date" />
+          </label>
+          <label>
+            ETA To
+            <input id="toDate" type="date" />
+          </label>
+          <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
+        </aside>
+
+        <section class="table-panel" aria-label="Trip plan list">
+          <div class="table-header">
+            <div>
+              <h2>Trip Plan List</h2>
+              <p id="resultCount">No plans loaded</p>
+            </div>
+            <div id="cloudStatus" class="import-status">Checking Supabase</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Plan</th>
+                  <th>Status</th>
+                  <th>Type</th>
+                  <th>ETA</th>
+                  <th>Stops</th>
+                  <th>Destinations</th>
+                  <th>Transport</th>
+                  <th>Min Buffer</th>
+                </tr>
+              </thead>
+              <tbody id="planRows"></tbody>
+            </table>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <h3>No trip plans loaded</h3>
+            <p>Create a trip plan to start tracking outbound dispatches.</p>
+          </div>
+        </section>
+
+        <aside class="detail-panel" aria-label="Trip plan detail">
+          <div id="detailEmpty" class="detail-empty">
+            <h2>Details</h2>
+            <p>Select a trip plan to review stops, appointment links, and time buffer.</p>
+          </div>
+          <section id="detailView" class="detail-form hidden"></section>
+        </aside>
+      </section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/trip-plans-list.js"></script>
+  </body>
+</html>
