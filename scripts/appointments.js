@@ -2,6 +2,7 @@ const DB_NAME = "carrier-appt-manager";
 const DB_VERSION = 1;
 const RECORD_STORE = "appointments";
 const SUPABASE_TABLE = "appointments";
+const TRIP_TABLE = "trip_plans";
 
 const state = {
   records: [],
@@ -24,6 +25,21 @@ const state = {
     from: "",
     to: "",
   },
+  tripPlansByIsa: new Map(),
+};
+
+const TRIP_PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
+const ETA_PERIODS = {
+  "00-03": { label: "00:00-03:00" },
+  "03-06": { label: "03:00-06:00" },
+  "06-09": { label: "06:00-09:00" },
+  "09-12": { label: "09:00-12:00" },
+  "12-15": { label: "12:00-15:00" },
+  "15-18": { label: "15:00-18:00" },
+  "18-21": { label: "18:00-21:00" },
+  "21-24": { label: "21:00-24:00" },
+  AM: { label: "AM" },
+  PM: { label: "PM" },
 };
 
 const LOAD_TYPES = [
@@ -77,6 +93,8 @@ const els = {
   detailTrailer: document.getElementById("detailTrailer"),
   detailSource: document.getElementById("detailSource"),
   detailUpdated: document.getElementById("detailUpdated"),
+  detailTripPlan: document.getElementById("detailTripPlan"),
+  detailTripPlanSummary: document.getElementById("detailTripPlanSummary"),
   detailChangeLog: document.getElementById("detailChangeLog"),
   manualPanel: document.getElementById("manualPanel"),
   closeManualButton: document.getElementById("closeManualButton"),
@@ -159,6 +177,7 @@ async function loadRecords() {
   if (state.supabase.enabled) {
     try {
       state.records = await loadRecordsFromSupabase();
+      state.tripPlansByIsa = await loadTripPlansByIsa();
       await saveRecordsToDb(state.records);
       setImportStatus("Loaded from Supabase. Changes are synced to cloud.");
       updateCloudStatus("Connected");
@@ -252,8 +271,26 @@ function supabaseEndpoint(query = "") {
   return `${state.supabase.url}/rest/v1/${SUPABASE_TABLE}${query}`;
 }
 
+function supabaseTableEndpoint(table, query = "") {
+  return `${state.supabase.url}/rest/v1/${table}${query}`;
+}
+
 async function supabaseRequest(path, options = {}) {
   const response = await fetch(supabaseEndpoint(path), {
+    ...options,
+    headers: supabaseHeaders(options.headers || {}),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `${response.status} ${response.statusText}`);
+  }
+  if (response.status === 204) return null;
+  const text = await response.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function supabaseTableRequest(table, path, options = {}) {
+  const response = await fetch(supabaseTableEndpoint(table, path), {
     ...options,
     headers: supabaseHeaders(options.headers || {}),
   });
@@ -269,6 +306,31 @@ async function supabaseRequest(path, options = {}) {
 async function loadRecordsFromSupabase() {
   const rows = await supabaseRequest("?select=*&order=schedule_time_raw.asc", { method: "GET" });
   return (rows || []).map(recordFromSupabaseRow);
+}
+
+async function loadTripPlansByIsa() {
+  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=id,plan_name,plan_type,plan_status,eta_date,eta_period,transport_mode,stops,updated_at&order=eta_at.desc", { method: "GET" });
+  const byIsa = new Map();
+  (rows || []).forEach((row) => {
+    const status = normalizeTripPlanStatus(row.plan_status);
+    if (status === "voided") return;
+    const plan = {
+      id: clean(row.id),
+      name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
+      type: clean(row.plan_type),
+      status,
+      etaDate: clean(row.eta_date),
+      etaPeriod: clean(row.eta_period),
+      transport: clean(row.transport_mode),
+      stops: Array.isArray(row.stops) ? row.stops : [],
+      updatedAt: clean(row.updated_at),
+    };
+    plan.stops.forEach((stop) => {
+      const isa = clean(stop.isa);
+      if (isa && !byIsa.has(isa)) byIsa.set(isa, { ...plan, matchedStop: stop });
+    });
+  });
+  return byIsa;
 }
 
 async function upsertRecordsToSupabase(records) {
@@ -745,9 +807,18 @@ function renderRows() {
   els.appointmentRows.innerHTML = records.map((record) => {
     const selected = record.key === state.selectedKey ? "selected" : "";
     const loadTypeMeta = getLoadTypeMeta(record.loadType);
+    const matchedPlan = tripPlanForRecord(record);
+    const tripStatus = matchedPlan ? `
+      <small class="trip-status-hint status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}">
+        ${escapeHtml(matchedPlan.status)}
+      </small>
+    ` : "";
     return `
       <tr class="${selected}" data-key="${escapeAttr(record.key)}">
-        <td>${escapeHtml(record.appointmentId || record.referenceCode || "-")}</td>
+        <td>
+          <span class="isa-text">${escapeHtml(record.appointmentId || record.referenceCode || "-")}</span>
+          ${tripStatus}
+        </td>
         <td><strong>${escapeHtml(record.fc || "-")}</strong></td>
         <td><span class="status-pill ${statusClass(record.status)}">${escapeHtml(record.status || "Unknown")}</span></td>
         <td>${escapeHtml(record.scheduleTime || "-")}</td>
@@ -908,7 +979,31 @@ function renderDetail() {
   els.detailTrailer.textContent = record.trailer || "-";
   els.detailSource.textContent = record.source || "-";
   els.detailUpdated.textContent = record.lastUpdated ? new Date(record.lastUpdated).toLocaleString() : "-";
+  renderDetailTripPlan(record);
   renderDetailChangeLog(record);
+}
+
+function renderDetailTripPlan(record) {
+  const plan = tripPlanForRecord(record);
+  els.detailTripPlan.classList.toggle("hidden", !plan);
+  if (!plan) {
+    els.detailTripPlanSummary.innerHTML = "";
+    return;
+  }
+  const stop = plan.matchedStop || {};
+  els.detailTripPlanSummary.innerHTML = `
+    <div class="matched-plan-head">
+      <span class="plan-status-dot status-${escapeAttr(tripPlanStatusClass(plan.status))}">${escapeHtml(plan.status)}</span>
+      <a href="./pages/trip-plans.html" class="matched-plan-link">${escapeHtml(plan.name)}</a>
+    </div>
+    <dl class="matched-plan-meta">
+      <div><dt>Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
+      <div><dt>ETA</dt><dd>${escapeHtml(formatTripPlanEta(plan))}</dd></div>
+      <div><dt>Stop</dt><dd>${escapeHtml(stop.stop_number || "-")}</dd></div>
+      <div><dt>Destination</dt><dd>${escapeHtml(stop.destination || "-")}</dd></div>
+      <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
+    </dl>
+  `;
 }
 
 function renderDetailChangeLog(record) {
@@ -1022,6 +1117,27 @@ function statusClass(status) {
   if (normalized.includes("close") || normalized.includes("complete") || normalized.includes("unloaded")) return "done";
   if (normalized.includes("request") || normalized.includes("pending")) return "pending";
   return "";
+}
+
+function tripPlanForRecord(record) {
+  return state.tripPlansByIsa.get(clean(record.appointmentId)) || null;
+}
+
+function normalizeTripPlanStatus(status) {
+  const value = clean(status);
+  if (value === "Voided") return "voided";
+  if (value === "Active" || !value) return "Planned";
+  return TRIP_PLAN_STATUSES.includes(value) ? value : value;
+}
+
+function tripPlanStatusClass(status) {
+  return clean(status).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
+}
+
+function formatTripPlanEta(plan) {
+  if (!plan.etaDate) return "-";
+  const period = ETA_PERIODS[plan.etaPeriod]?.label || plan.etaPeriod || "";
+  return `${plan.etaDate} ${period}`.trim();
 }
 
 function isIssueStatus(status) {

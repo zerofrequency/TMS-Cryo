@@ -4,10 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trip Plans</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
     <link rel="stylesheet" href="../styles/appointments.css" />
     <link rel="stylesheet" href="../styles/trip-plans-list.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
+        <span class="site-nav-link disabled">Inventory</span>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
     <main class="app-shell">
       <header class="topbar">
         <div>
@@ -15,8 +26,6 @@
           <p>Review outbound plans, stops, ETA, and appointment buffers.</p>
         </div>
         <div class="actions">
-          <a class="button" href="../appts.html">Appointments</a>
-          <a class="button" href="../index.html">Home</a>
           <a class="button primary" href="./create-trip-plans.html">Create Trip Plan</a>
         </div>
       </header>
@@ -89,6 +98,8 @@
                   <th>Destinations</th>
                   <th>Transport</th>
                   <th>Min Buffer</th>
+                  <th>Countdown</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="planRows"></tbody>

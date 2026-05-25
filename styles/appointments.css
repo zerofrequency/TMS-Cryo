@@ -559,6 +559,45 @@ tbody tr.selected {
   color: var(--warning);
 }
 
+.isa-text {
+  display: block;
+}
+
+.trip-status-hint {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.trip-status-hint.status-planned,
+.plan-status-dot.status-planned {
+  color: var(--accent);
+}
+
+.trip-status-hint.status-waiting,
+.trip-status-hint.status-loading,
+.plan-status-dot.status-waiting,
+.plan-status-dot.status-loading {
+  color: var(--warning);
+}
+
+.trip-status-hint.status-in-transit,
+.plan-status-dot.status-in-transit {
+  color: var(--ok);
+}
+
+.trip-status-hint.status-delivered,
+.plan-status-dot.status-delivered {
+  color: #344054;
+}
+
+.trip-status-hint.status-voided,
+.plan-status-dot.status-voided {
+  color: var(--muted);
+}
+
 .load-type-select,
 .load-type-field {
   --load-type-bg: #f1f5f9;
@@ -671,6 +710,69 @@ tbody tr.selected {
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
+}
+
+.matched-plan {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.matched-plan.hidden {
+  display: none;
+}
+
+.matched-plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-status-dot {
+  border-radius: 999px;
+  background: var(--panel-soft);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.matched-plan-link {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.matched-plan-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.matched-plan-meta div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.matched-plan-meta dt,
+.matched-plan-meta dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.matched-plan-meta dt {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.matched-plan-meta dd {
+  color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .change-log-list {

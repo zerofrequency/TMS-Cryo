@@ -4,9 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Create Trip Plans</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
     <link rel="stylesheet" href="../styles/trip-plans.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
+        <span class="site-nav-link disabled">Inventory</span>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
     <main class="trip-shell">
       <header class="trip-header">
         <div>
@@ -21,7 +32,7 @@
         <form id="tripForm" class="plan-form">
           <div class="form-title">
             <h2>Create Trip Plan</h2>
-            <p>ETA uses AM = 12:00 and PM = 18:00.</p>
+            <p>ETA buffer uses the latest time in the selected period.</p>
           </div>
 
           <div class="form-grid">
@@ -49,8 +60,14 @@
             <label>
               ETA Period
               <select id="etaPeriod">
-                <option value="AM">AM · 12:00</option>
-                <option value="PM">PM · 18:00</option>
+                <option value="00-03">00:00-03:00</option>
+                <option value="03-06">03:00-06:00</option>
+                <option value="06-09">06:00-09:00</option>
+                <option value="09-12">09:00-12:00</option>
+                <option value="12-15">12:00-15:00</option>
+                <option value="15-18">15:00-18:00</option>
+                <option value="18-21">18:00-21:00</option>
+                <option value="21-24">21:00-24:00</option>
               </select>
             </label>
             <label>
@@ -73,7 +90,7 @@
           </label>
 
           <div class="form-actions">
-            <button class="button primary" type="submit">Save Trip Plan</button>
+            <button id="saveTripPlanButton" class="button primary" type="submit">Save Trip Plan</button>
             <button id="clearFormButton" class="button" type="button">Clear</button>
           </div>
         </form>

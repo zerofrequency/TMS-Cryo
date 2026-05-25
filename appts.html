@@ -4,9 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Carrier Appointment Manager</title>
+    <link rel="stylesheet" href="./styles/site-nav.css" />
     <link rel="stylesheet" href="./styles/appointments.css" />
   </head>
   <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a class="site-brand" href="./index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="./index.html">Home</a>
+        <a class="site-nav-link active" href="./appts.html">Appt</a>
+        <a class="site-nav-link" href="./pages/trip-plans.html">Trip Plans</a>
+        <span class="site-nav-link disabled">Inventory</span>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
     <main class="app-shell">
       <header class="topbar">
         <div>
@@ -19,9 +30,7 @@
             <input id="fileInput" type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
           </label>
           <button id="addManualButton" class="button" type="button">Add Manually</button>
-          <a class="button" href="./index.html">Home</a>
           <a class="button" href="./pages/fc-dashboard.html">Hot FCs</a>
-          <a class="button" href="./pages/trip-plans.html">Trip Plans</a>
           <button id="exportButton" class="button" type="button">Export CSV</button>
         </div>
       </header>
@@ -181,6 +190,10 @@
                 <dd id="detailUpdated"></dd>
               </div>
             </dl>
+            <section id="detailTripPlan" class="matched-plan hidden">
+              <h3>Trip Plan</h3>
+              <div id="detailTripPlanSummary"></div>
+            </section>
             <section class="change-log">
               <h3>Change Log</h3>
               <div id="detailChangeLog" class="change-log-list"></div>

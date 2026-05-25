@@ -3,6 +3,18 @@
 
   const TRIP_TABLE = "trip_plans";
   const PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
+  const ETA_PERIODS = {
+    "00-03": { label: "00:00-03:00", end: "03:00" },
+    "03-06": { label: "03:00-06:00", end: "06:00" },
+    "06-09": { label: "06:00-09:00", end: "09:00" },
+    "09-12": { label: "09:00-12:00", end: "12:00" },
+    "12-15": { label: "12:00-15:00", end: "15:00" },
+    "15-18": { label: "15:00-18:00", end: "18:00" },
+    "18-21": { label: "18:00-21:00", end: "21:00" },
+    "21-24": { label: "21:00-24:00", end: "24:00" },
+    AM: { label: "AM", end: "12:00" },
+    PM: { label: "PM", end: "18:00" },
+  };
   const els = {
     totalCount: document.getElementById("totalCount"),
     activeCount: document.getElementById("activeCount"),
@@ -26,6 +38,7 @@
     supabase: { url: "", key: "", enabled: false },
     plans: [],
     selectedId: "",
+    refreshTimer: null,
   };
 
   boot();
@@ -56,11 +69,17 @@
       render();
     });
     els.planRows.addEventListener("click", (event) => {
+      if (event.target.closest("a, button, select")) return;
       const row = event.target.closest("[data-plan-id]");
       if (!row) return;
       state.selectedId = row.dataset.planId;
       render();
     });
+    els.planRows.addEventListener("change", (event) => {
+      const select = event.target.closest("[data-status-plan]");
+      if (select) updatePlanStatus(select.dataset.statusPlan, select.value);
+    });
+    state.refreshTimer = window.setInterval(render, 60000);
   }
 
   function loadSupabaseConfig() {
@@ -108,19 +127,26 @@
       const stops = Array.isArray(plan.stops) ? plan.stops : [];
       const destinations = compactUnique(stops.map((stop) => stop.destination)).join(", ") || "-";
       const buffer = minBuffer(plan);
+      const countdown = nextAppointmentCountdown(plan);
       return `
         <tr class="${plan.id === state.selectedId ? "selected-row" : ""}" data-plan-id="${escapeAttr(plan.id)}">
           <td>
             <strong>${escapeHtml(plan.name)}</strong>
             <small>${escapeHtml(plan.planDate || "No plan date")}</small>
           </td>
-          <td><span class="plan-status status-${statusClass(plan.status)}">${escapeHtml(plan.status)}</span></td>
+          <td>
+            <select class="status-select status-${statusClass(plan.status)}" data-status-plan="${escapeAttr(plan.id)}" aria-label="Plan status">
+              ${statusOptions(plan.status)}
+            </select>
+          </td>
           <td>${escapeHtml(plan.type || "-")}</td>
           <td>${escapeHtml(formatEta(plan))}</td>
           <td>${stops.length}</td>
           <td>${escapeHtml(destinations)}</td>
           <td>${escapeHtml(plan.transport || "-")}</td>
           <td><span class="${bufferClass(buffer)}">${escapeHtml(formatBuffer(buffer))}</span></td>
+          <td><span class="${countdownClass(countdown)}">${escapeHtml(formatCountdown(countdown))}</span></td>
+          <td><a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a></td>
         </tr>
       `;
     }).join("");
@@ -141,6 +167,7 @@
           <span class="fc-badge">${escapeHtml(plan.status)}</span>
           <h2>${escapeHtml(plan.name)}</h2>
         </div>
+        <a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a>
       </div>
       <dl class="meta">
         <div><dt>Plan Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
@@ -148,11 +175,16 @@
         <div><dt>Plan Date</dt><dd>${escapeHtml(plan.planDate || "-")}</dd></div>
         <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
         <div><dt>Min Buffer</dt><dd>${escapeHtml(formatBuffer(minBuffer(plan)))}</dd></div>
+        <div><dt>Countdown</dt><dd>${escapeHtml(formatCountdown(nextAppointmentCountdown(plan)))}</dd></div>
         <div><dt>Updated</dt><dd>${escapeHtml(formatDateTime(plan.updatedAt))}</dd></div>
       </dl>
       <section class="trip-stops">
         <h3>Stops</h3>
         ${stops.map(renderStop).join("") || '<p class="muted-note">No stops saved.</p>'}
+      </section>
+      <section class="trip-log">
+        <h3>Change Log</h3>
+        ${renderChangeLog(plan.changeLog)}
       </section>
       ${plan.notes ? `<section class="trip-notes"><h3>Notes</h3><p>${escapeHtml(plan.notes)}</p></section>` : ""}
     `;
@@ -169,9 +201,26 @@
           <div><dt>ISA / Ref</dt><dd>${escapeHtml(stop.isa || "-")}</dd></div>
           <div><dt>Destination</dt><dd>${escapeHtml(stop.destination || "-")}</dd></div>
           <div><dt>Appointment</dt><dd>${escapeHtml(stop.schedule_time || "-")}</dd></div>
+          <div><dt>Countdown</dt><dd>${escapeHtml(formatCountdown(stopCountdown(stop)))}</dd></div>
           <div><dt>Transit</dt><dd>${escapeHtml(formatDays(stop.transit_days))}</dd></div>
         </dl>
       </article>
+    `;
+  }
+
+  function renderChangeLog(changeLog) {
+    const entries = Array.isArray(changeLog) ? changeLog : [];
+    if (!entries.length) return '<p class="muted-note">No changes recorded.</p>';
+    return `
+      <div class="trip-log-list">
+        ${entries.slice().reverse().map((entry) => `
+          <div class="trip-log-entry">
+            <strong>${escapeHtml(entry.action || "Change")}</strong>
+            <span>${escapeHtml(formatDateTime(entry.at))}</span>
+            <p>${escapeHtml(entry.message || "")}</p>
+          </div>
+        `).join("")}
+      </div>
     `;
   }
 
@@ -217,6 +266,7 @@
       transport: clean(row.transport_mode),
       notes: clean(row.notes),
       stops: Array.isArray(row.stops) ? row.stops : [],
+      changeLog: Array.isArray(row.change_log) ? row.change_log : [],
       updatedAt: clean(row.updated_at),
     };
   }
@@ -240,6 +290,43 @@
       .map((stop) => Number(stop.time_buffer_hours))
       .filter((value) => Number.isFinite(value));
     return values.length ? Math.min(...values) : null;
+  }
+
+  async function updatePlanStatus(planId, nextStatus) {
+    if (!state.supabase.enabled || !planId) return;
+    const plan = state.plans.find((item) => item.id === planId);
+    if (!plan || plan.status === nextStatus) return;
+    const previousStatus = plan.status;
+    const logEntry = {
+      at: new Date().toISOString(),
+      action: "Status updated",
+      field: "plan_status",
+      from: previousStatus,
+      to: nextStatus,
+      message: `Status changed from ${previousStatus} to ${nextStatus}`,
+    };
+    const changeLog = [...plan.changeLog, logEntry];
+    try {
+      setCloudStatus("Updating status", "");
+      await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(planId)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          plan_status: nextStatus,
+          change_log: changeLog,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+      plan.status = nextStatus;
+      plan.changeLog = changeLog;
+      plan.updatedAt = logEntry.at;
+      setCloudStatus("Status updated", "connected");
+      render();
+    } catch (error) {
+      console.error(error);
+      setCloudStatus(error.message, "error");
+      render();
+    }
   }
 
   async function supabaseRequest(path, options = {}) {
@@ -269,8 +356,9 @@
 
   function formatEta(plan) {
     if (!plan.etaDate) return "--";
-    const time = plan.etaPeriod === "PM" ? "18:00" : "12:00";
-    return `${plan.etaDate} ${plan.etaPeriod || ""} ${time}`.trim();
+    const period = ETA_PERIODS[plan.etaPeriod];
+    if (!period) return `${plan.etaDate} ${plan.etaPeriod || ""}`.trim();
+    return `${plan.etaDate} ${period.label}`;
   }
 
   function formatDateTime(value) {
@@ -300,6 +388,63 @@
     return `${number >= 0 ? "+" : ""}${number.toFixed(1)}h`;
   }
 
+  function nextAppointmentCountdown(plan) {
+    const countdowns = (Array.isArray(plan.stops) ? plan.stops : [])
+      .map(stopCountdown)
+      .filter((value) => value !== null);
+    if (!countdowns.length) return null;
+    return countdowns.reduce((nearest, current) => Math.abs(current) < Math.abs(nearest) ? current : nearest);
+  }
+
+  function stopCountdown(stop) {
+    const date = parseCarrierTime(stop.schedule_time);
+    if (!date) return null;
+    return date.getTime() - Date.now();
+  }
+
+  function formatCountdown(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+    const milliseconds = Number(value);
+    const absoluteMinutes = Math.max(0, Math.round(Math.abs(milliseconds) / 60000));
+    const days = Math.floor(absoluteMinutes / 1440);
+    const hours = Math.floor((absoluteMinutes % 1440) / 60);
+    const minutes = absoluteMinutes % 60;
+    const parts = [];
+    if (days) parts.push(`${days}d`);
+    if (hours || days) parts.push(`${hours}h`);
+    parts.push(`${minutes}m`);
+    return milliseconds < 0 ? `Overdue ${parts.join(" ")}` : parts.join(" ");
+  }
+
+  function countdownClass(value) {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "countdown-neutral";
+    const hours = Number(value) / 3600000;
+    if (hours < 0) return "countdown-overdue";
+    if (hours <= 24) return "countdown-warning";
+    return "countdown-ok";
+  }
+
+  function parseCarrierTime(value) {
+    const text = clean(value);
+    if (!text) return null;
+    const normalized = text.replace(/\b(MST|MDT|PST|PDT|CST|CDT|EST|EDT)\b/g, (tz) => ({
+      MST: "-07:00",
+      MDT: "-06:00",
+      PST: "-08:00",
+      PDT: "-07:00",
+      CST: "-06:00",
+      CDT: "-05:00",
+      EST: "-05:00",
+      EDT: "-04:00",
+    })[tz] || tz);
+    const parsed = new Date(normalized);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*([+-]\d{2}:\d{2})?$/.exec(normalized);
+    if (!match) return null;
+    const [, month, day, year, hour, minute, offset = "-07:00"] = match;
+    return new Date(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.padStart(2, "0")}:${minute}:00${offset}`);
+  }
+
   function bufferClass(value) {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return "buffer-neutral";
     const number = Number(value);
@@ -310,6 +455,12 @@
 
   function statusClass(status) {
     return clean(status).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
+  }
+
+  function statusOptions(selectedStatus) {
+    return PLAN_STATUSES.map((status) => (
+      `<option value="${escapeAttr(status)}" ${status === selectedStatus ? "selected" : ""}>${escapeHtml(status)}</option>`
+    )).join("");
   }
 
   function compactUnique(values) {

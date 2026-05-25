@@ -15,6 +15,7 @@
     transportMode: document.getElementById("transportMode"),
     stopsContainer: document.getElementById("stopsContainer"),
     planNotes: document.getElementById("planNotes"),
+    saveTripPlanButton: document.getElementById("saveTripPlanButton"),
     clearFormButton: document.getElementById("clearFormButton"),
     prevMonthButton: document.getElementById("prevMonthButton"),
     nextMonthButton: document.getElementById("nextMonthButton"),
@@ -35,11 +36,26 @@
     fcs: new Map(),
     plans: [],
     calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    editingPlanId: "",
+    editApplied: false,
+  };
+  const ETA_PERIODS = {
+    "00-03": { label: "00:00-03:00", endHour: 3 },
+    "03-06": { label: "03:00-06:00", endHour: 6 },
+    "06-09": { label: "06:00-09:00", endHour: 9 },
+    "09-12": { label: "09:00-12:00", endHour: 12 },
+    "12-15": { label: "12:00-15:00", endHour: 15 },
+    "15-18": { label: "15:00-18:00", endHour: 18 },
+    "18-21": { label: "18:00-21:00", endHour: 21 },
+    "21-24": { label: "21:00-24:00", endHour: 24 },
+    AM: { label: "AM", endHour: 12 },
+    PM: { label: "PM", endHour: 18 },
   };
   boot();
 
   async function boot() {
     loadSupabaseConfig();
+    state.editingPlanId = new URLSearchParams(window.location.search).get("edit") || "";
     bindEvents();
     const today = new Date().toISOString().slice(0, 10);
     els.planDate.value = today;
@@ -91,6 +107,7 @@
       renderStops();
       renderAppointmentCalendar();
       await loadPlans();
+      applyEditPlanFromUrl();
       setCloudStatus("Connected", "connected");
     } catch (error) {
       console.error(error);
@@ -102,6 +119,7 @@
     if (!state.supabase.enabled) return;
     try {
       state.plans = await supabaseRequest(`${TRIP_TABLE}?select=*&order=eta_at.desc`);
+      applyEditPlanFromUrl();
     } catch (error) {
       console.error(error);
       setCloudStatus(error.message, "error");
@@ -229,7 +247,7 @@
     const payload = {
       plan_name: clean(els.planName.value) || `${els.planType.value} ${els.etaDate.value}`,
       plan_type: els.planType.value,
-      plan_status: "Planned",
+      plan_status: currentEditingPlan()?.plan_status || "Planned",
       plan_date: els.planDate.value || null,
       eta_date: els.etaDate.value,
       eta_period: els.etaPeriod.value,
@@ -241,14 +259,23 @@
     };
 
     try {
-      await supabaseRequest(TRIP_TABLE, {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify(payload),
-      });
-      setCloudStatus("Trip plan saved", "connected");
+      if (state.editingPlanId) {
+        await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.editingPlanId)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(payload),
+        });
+        setCloudStatus("Trip plan updated", "connected");
+      } else {
+        await supabaseRequest(TRIP_TABLE, {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(payload),
+        });
+        setCloudStatus("Trip plan saved", "connected");
+      }
       await loadPlans();
-      clearForm();
+      if (!state.editingPlanId) clearForm();
     } catch (error) {
       console.error(error);
       setCloudStatus(error.message, "error");
@@ -299,12 +326,20 @@
 
   function etaDateTime() {
     const date = els.etaDate.value || new Date().toISOString().slice(0, 10);
-    const hour = els.etaPeriod.value === "PM" ? "18:00:00" : "12:00:00";
-    return new Date(`${date}T${hour}-07:00`);
+    const endHour = ETA_PERIODS[els.etaPeriod.value]?.endHour || 12;
+    if (endHour === 24) {
+      const nextDate = new Date(`${date}T00:00:00-07:00`);
+      nextDate.setDate(nextDate.getDate() + 1);
+      return nextDate;
+    }
+    return new Date(`${date}T${String(endHour).padStart(2, "0")}:00:00-07:00`);
   }
 
   function findActiveIsaConflict(stops) {
-    const activePlans = state.plans.filter((plan) => normalizePlanStatus(plan.plan_status) !== "voided");
+    const activePlans = state.plans.filter((plan) => {
+      if (state.editingPlanId && clean(plan.id) === state.editingPlanId) return false;
+      return normalizePlanStatus(plan.plan_status) !== "voided";
+    });
     const used = new Map();
     activePlans.forEach((plan) => {
       (Array.isArray(plan.stops) ? plan.stops : []).forEach((stop) => {
@@ -327,6 +362,65 @@
     const value = clean(status);
     if (value === "Voided") return "voided";
     if (value === "Active" || !value) return "Planned";
+    return value;
+  }
+
+  function applyEditPlanFromUrl() {
+    if (!state.editingPlanId || state.editApplied || !state.plans.length) return;
+    const plan = currentEditingPlan();
+    if (!plan) {
+      setCloudStatus("Trip plan not found", "error");
+      return;
+    }
+    const stops = Array.isArray(plan.stops) ? plan.stops : [];
+    state.editApplied = true;
+    els.planName.value = clean(plan.plan_name);
+    setSelectValue(els.planType, clean(plan.plan_type));
+    els.planDate.value = clean(plan.plan_date);
+    els.etaDate.value = clean(plan.eta_date) || new Date().toISOString().slice(0, 10);
+    setSelectValue(els.etaPeriod, normalizeEtaPeriod(clean(plan.eta_period)) || "09-12");
+    els.transportMode.value = clean(plan.transport_mode);
+    els.planNotes.value = clean(plan.notes);
+    renderStops();
+    stops.forEach((stop, index) => populateStop(index, stop));
+    updateBuffers();
+    els.saveTripPlanButton.textContent = "Update Trip Plan";
+    document.title = "Edit Trip Plan";
+    document.querySelector("h1").textContent = "Edit Trip Plan";
+    document.querySelector(".form-title h2").textContent = "Edit Trip Plan";
+    setCloudStatus("Editing existing trip plan", "connected");
+  }
+
+  function populateStop(index, stop) {
+    const node = els.stopsContainer.querySelectorAll(".stop-card")[index];
+    if (!node) return;
+    const source = clean(stop.source) === "private" ? "private" : "appointment";
+    node.querySelector(".stop-source").value = source;
+    updateStopMode(node);
+    if (source === "private") {
+      node.querySelector(".manual-isa").value = clean(stop.isa);
+    } else {
+      node.querySelector(".stop-isa").value = clean(stop.isa);
+    }
+    node.querySelector(".stop-destination").value = clean(stop.destination);
+    node.querySelector(".stop-schedule").value = clean(stop.schedule_time);
+    node.querySelector(".stop-transit").value = stop.transit_days ?? "";
+  }
+
+  function currentEditingPlan() {
+    return state.plans.find((plan) => clean(plan.id) === state.editingPlanId);
+  }
+
+  function setSelectValue(select, value) {
+    if (!value) return;
+    const option = Array.from(select.options).find((item) => item.value === value);
+    if (option) select.value = value;
+  }
+
+  function normalizeEtaPeriod(period) {
+    const value = clean(period);
+    if (value === "AM") return "09-12";
+    if (value === "PM") return "15-18";
     return value;
   }
 
@@ -437,6 +531,15 @@
     const today = new Date().toISOString().slice(0, 10);
     els.planDate.value = today;
     els.etaDate.value = today;
+    if (state.editingPlanId) {
+      state.editingPlanId = "";
+      state.editApplied = false;
+      window.history.replaceState({}, "", window.location.pathname);
+      els.saveTripPlanButton.textContent = "Save Trip Plan";
+      document.title = "Create Trip Plans";
+      document.querySelector("h1").textContent = "Create Trip Plans";
+      document.querySelector(".form-title h2").textContent = "Create Trip Plan";
+    }
     renderStops();
   }
 
