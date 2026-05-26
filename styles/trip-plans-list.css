@@ -30,8 +30,68 @@
   font-weight: 650;
 }
 
-.edit-button {
+.button.compact {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.row-actions,
+.detail-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.detail-actions {
+  justify-content: flex-end;
+}
+
+.edit-button,
+.view-plan-link {
   color: var(--accent);
+  white-space: nowrap;
+}
+
+.view-plan-link {
+  border-color: rgba(20, 104, 216, 0.28);
+  background: #e8f1ff;
+}
+
+.cell-lines {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cell-line {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.countdown-lines {
+  min-width: 150px;
+}
+
+.countdown-line {
+  display: grid;
+  gap: 2px;
+}
+
+.countdown-line small {
+  display: block;
+  max-width: 220px;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

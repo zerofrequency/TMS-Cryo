@@ -9,11 +9,19 @@
   </head>
   <body>
     <nav class="site-nav" aria-label="Primary navigation">
-      <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
       <div class="site-nav-links">
         <a class="site-nav-link" href="../index.html">Home</a>
         <a class="site-nav-link" href="../appts.html">Appt</a>
         <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./resources.html">Resources</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -32,13 +40,13 @@
         <form id="tripForm" class="plan-form">
           <div class="form-title">
             <h2>Create Trip Plan</h2>
-            <p>ETA buffer uses the latest time in the selected period.</p>
+            <p>ETD buffer uses the latest time in the selected period.</p>
           </div>
 
           <div class="form-grid">
             <label>
               Plan Name
-              <input id="planName" type="text" placeholder="Example: Fontana outbound" />
+              <input id="planName" type="text" placeholder="Auto: MM/DD-stop1-stop2-XXXX" />
             </label>
             <label>
               Plan Type
@@ -54,11 +62,11 @@
               <input id="planDate" type="date" />
             </label>
             <label>
-              ETA Date
+              ETD Date
               <input id="etaDate" type="date" required />
             </label>
             <label>
-              ETA Period
+              ETD Period
               <select id="etaPeriod">
                 <option value="00-03">00:00-03:00</option>
                 <option value="03-06">03:00-06:00</option>
@@ -95,19 +103,14 @@
           </div>
         </form>
 
-        <section class="calendar-panel">
+        <section class="calendar-panel timeline-panel">
           <div class="panel-head">
             <div>
-              <h2>Appointment Calendar</h2>
+              <h2>Appointment Timeline</h2>
               <p id="calendarSummary">No appointments loaded</p>
             </div>
-            <div class="calendar-nav">
-              <button id="prevMonthButton" class="button compact neutral" type="button" aria-label="Previous month">&lt;</button>
-              <strong id="calendarTitle"></strong>
-              <button id="nextMonthButton" class="button compact neutral" type="button" aria-label="Next month">&gt;</button>
-            </div>
           </div>
-          <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
+          <div id="calendarGrid" class="appointment-timeline" aria-label="Appointment timeline"></div>
         </section>
       </section>
     </main>
@@ -165,6 +168,7 @@
     </div>
 
     <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
     <script src="../scripts/trip-plans.js"></script>
   </body>
 </html>

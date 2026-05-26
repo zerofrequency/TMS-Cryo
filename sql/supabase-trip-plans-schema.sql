@@ -4,9 +4,9 @@ create table if not exists public.trip_plans (
   plan_type text not null check (plan_type in ('Single Drop', 'Two Drops', 'Three Drops', 'Four Drops')),
   plan_status text not null default 'Planned' check (plan_status in ('voided', 'Planned', 'Waiting', 'Loading', 'In Transit', 'Delivered')),
   plan_date date,
-  eta_date date not null,
-  eta_period text not null check (eta_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM')),
-  eta_at timestamptz not null,
+  etd_date date not null,
+  etd_period text not null check (etd_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM')),
+  etd_at timestamptz not null,
   transport_mode text,
   notes text,
   stops jsonb not null default '[]'::jsonb,
@@ -14,6 +14,39 @@ create table if not exists public.trip_plans (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'eta_date'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'etd_date'
+  ) then
+    alter table public.trip_plans rename column eta_date to etd_date;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'eta_period'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'etd_period'
+  ) then
+    alter table public.trip_plans rename column eta_period to etd_period;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'eta_at'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'trip_plans' and column_name = 'etd_at'
+  ) then
+    alter table public.trip_plans rename column eta_at to etd_at;
+  end if;
+end $$;
 
 alter table public.trip_plans
 add column if not exists plan_status text not null default 'Planned';
@@ -23,6 +56,9 @@ add column if not exists change_log jsonb not null default '[]'::jsonb;
 
 alter table public.trip_plans
 drop constraint if exists trip_plans_eta_period_check;
+
+alter table public.trip_plans
+drop constraint if exists trip_plans_etd_period_check;
 
 alter table public.trip_plans
 drop constraint if exists trip_plans_plan_status_check;
@@ -42,10 +78,11 @@ add constraint trip_plans_plan_status_check
 check (plan_status in ('voided', 'Planned', 'Waiting', 'Loading', 'In Transit', 'Delivered'));
 
 alter table public.trip_plans
-add constraint trip_plans_eta_period_check
-check (eta_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM'));
+add constraint trip_plans_etd_period_check
+check (etd_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM'));
 
-create index if not exists trip_plans_eta_at_idx on public.trip_plans (eta_at);
+create index if not exists trip_plans_etd_at_idx on public.trip_plans (etd_at);
+drop index if exists public.trip_plans_eta_at_idx;
 create index if not exists trip_plans_plan_date_idx on public.trip_plans (plan_date);
 create index if not exists trip_plans_plan_status_idx on public.trip_plans (plan_status);
 

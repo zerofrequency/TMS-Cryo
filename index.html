@@ -9,11 +9,19 @@
   </head>
   <body>
     <nav class="site-nav" aria-label="Primary navigation">
-      <a class="site-brand" href="./index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-left">
+        <a class="site-brand" href="./index.html"><span class="site-brand-mark">TC</span>TMS Made By Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
       <div class="site-nav-links">
         <a class="site-nav-link active" href="./index.html">Home</a>
         <a class="site-nav-link" href="./appts.html">Appt</a>
         <a class="site-nav-link" href="./pages/trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./pages/resources.html">Resources</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -38,8 +46,15 @@
         <a class="module-card active" href="./pages/trip-plans.html">
           <span class="module-kicker">Live</span>
           <h2>Trip Plans</h2>
-          <p>Review outbound plans, stop details, ETA, destinations, and time buffers.</p>
+          <p>Review outbound plans, stop details, ETD, destinations, and time buffers.</p>
           <strong>Open trip plans</strong>
+        </a>
+
+        <a class="module-card active" href="./pages/resources.html">
+          <span class="module-kicker">Live</span>
+          <h2>Resources</h2>
+          <p>Monitor Fleet, Dock, and Loading Crew availability, occupancy, and assigned trip-plan usage.</p>
+          <strong>Open resource dashboard</strong>
         </a>
 
         <article class="module-card pending">
@@ -57,5 +72,7 @@
         </article>
       </section>
     </main>
+
+    <script src="./scripts/clocks.js"></script>
   </body>
 </html>

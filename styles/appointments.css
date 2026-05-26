@@ -235,7 +235,7 @@ h3 {
   gap: 12px;
   padding: 14px;
   position: sticky;
-  top: 16px;
+  top: 69px;
 }
 
 label {
@@ -283,33 +283,6 @@ textarea:focus {
   gap: 12px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-}
-
-.compact-clocks {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.1;
-  white-space: nowrap;
-  flex-wrap: wrap;
-}
-
-.compact-clocks span {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel-soft);
-  padding: 4px 7px;
-}
-
-.compact-clocks strong {
-  color: var(--text);
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .view-controls {
@@ -463,6 +436,36 @@ textarea:focus {
   background: #dbeafe;
 }
 
+.calendar-appointment.trip-bound {
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+.calendar-appointment.trip-bound.status-planned {
+  background: rgba(20, 104, 216, 0.12);
+  color: #0b3b85;
+}
+
+.calendar-appointment.trip-bound.status-waiting,
+.calendar-appointment.trip-bound.status-loading {
+  background: rgba(181, 71, 8, 0.14);
+  color: #5a2a07;
+}
+
+.calendar-appointment.trip-bound.status-in-transit {
+  background: rgba(6, 118, 71, 0.12);
+  color: #06452c;
+}
+
+.calendar-appointment.trip-bound.status-delivered {
+  background: #eef2f7;
+  color: #344054;
+}
+
+.calendar-appointment.trip-bound.status-voided {
+  background: #f4f4f5;
+  color: var(--muted);
+}
+
 .calendar-appointment strong,
 .calendar-appointment small,
 .calendar-appointment small span,
@@ -494,6 +497,207 @@ textarea:focus {
 
 .calendar-appointment small span {
   display: inline;
+}
+
+.timeline-view {
+  max-height: calc(100vh - 225px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 14px 16px 16px;
+}
+
+.timeline-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(220px, 260px);
+  gap: 10px;
+  align-items: start;
+  /* min-width: max-content; */
+  padding-bottom: 10px;
+}
+
+.timeline-day {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.timeline-day-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timeline-day-head strong {
+  font-size: 13px;
+}
+
+.timeline-day-head span,
+.timeline-empty {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.timeline-axis {
+  position: relative;
+  height: 12px;
+}
+
+.timeline-axis::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: -14px;
+  left: 0;
+  height: 2px;
+  background: #d7e1ef;
+}
+
+.timeline-axis::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  left: 0;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.timeline-items {
+  display: grid;
+  gap: 5px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 15px;
+  align-items: start;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--load-type-border, #cbd5e1);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text);
+  padding: 7px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.timeline-item.trip-bound {
+  border-left-color: rgba(15, 23, 42, 0.16);
+}
+
+.timeline-item.trip-bound.status-planned {
+  border-left-color: #1468d8;
+  background: rgba(20, 104, 216, 0.12);
+}
+
+.timeline-item.trip-bound.status-waiting,
+.timeline-item.trip-bound.status-loading {
+  border-left-color: #b54708;
+  background: rgba(181, 71, 8, 0.14);
+}
+
+.timeline-item.trip-bound.status-in-transit {
+  border-left-color: #067647;
+  background: rgba(6, 118, 71, 0.12);
+}
+
+.timeline-item.trip-bound.status-delivered {
+  border-left-color: #667085;
+  background: #eef2f7;
+}
+
+.timeline-item.trip-bound.status-voided {
+  border-left-color: #a1a1aa;
+  background: #f4f4f5;
+}
+
+.timeline-item:hover,
+.timeline-item.selected {
+  border-color: var(--accent);
+  background: #eef5ff;
+}
+
+.timeline-item.trip-bound:hover,
+.timeline-item.trip-bound.selected {
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+.timeline-item time,
+.timeline-item strong,
+.timeline-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+
+.timeline-item time {
+  color: var(--muted);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.timeline-item strong {
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.timeline-item-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.timeline-item-main,
+.timeline-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.timeline-isa {
+  font-weight: 850;
+}
+
+.timeline-load {
+  color: var(--load-type-text, var(--muted));
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.timeline-trip {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.timeline-trip.status-planned {
+  background: rgba(20, 104, 216, 0.12);
+  color: #0b3b85;
+}
+
+.timeline-trip.status-waiting,
+.timeline-trip.status-loading {
+  background: rgba(181, 71, 8, 0.14);
+  color: #5a2a07;
+}
+
+.timeline-trip.status-in-transit {
+  background: rgba(6, 118, 71, 0.12);
+  color: #06452c;
 }
 
 table {
@@ -532,17 +736,7 @@ tbody tr.selected {
   background: #eef5ff;
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  border-radius: 999px;
-  padding: 3px 9px;
-  background: #edf4ff;
-  color: #184a90;
-  font-size: 12px;
-  font-weight: 750;
-}
+
 
 .status-pill.issue {
   background: #fff0ee;
@@ -651,7 +845,7 @@ tbody tr.selected {
   min-height: 420px;
   padding: 16px;
   position: sticky;
-  top: 16px;
+  top: 69px;
 }
 
 .detail-empty {
@@ -847,5 +1041,13 @@ tbody tr.selected {
 
   .table-wrap {
     max-height: none;
+  }
+
+  .timeline-view {
+    max-height: 70vh;
+  }
+
+  .timeline-item {
+    grid-template-columns: 58px minmax(0, 1fr);
   }
 }

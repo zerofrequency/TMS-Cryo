@@ -10,11 +10,19 @@
   </head>
   <body>
     <nav class="site-nav" aria-label="Primary navigation">
-      <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
       <div class="site-nav-links">
         <a class="site-nav-link" href="../index.html">Home</a>
         <a class="site-nav-link" href="../appts.html">Appt</a>
         <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./resources.html">Resources</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -23,31 +31,12 @@
       <header class="topbar">
         <div>
           <h1>Trip Plans</h1>
-          <p>Review outbound plans, stops, ETA, and appointment buffers.</p>
+          <p>Review outbound plans, stops, ETD, and appointment buffers.</p>
         </div>
         <div class="actions">
           <a class="button primary" href="./create-trip-plans.html">Create Trip Plan</a>
         </div>
       </header>
-
-      <section class="stats" aria-label="Trip plan summary">
-        <article>
-          <span>Total</span>
-          <strong id="totalCount">0</strong>
-        </article>
-        <article>
-          <span>Active</span>
-          <strong id="activeCount">0</strong>
-        </article>
-        <article>
-          <span>In Transit</span>
-          <strong id="inTransitCount">0</strong>
-        </article>
-        <article>
-          <span>Issues</span>
-          <strong id="issueCount">0</strong>
-        </article>
-      </section>
 
       <section class="workspace trip-plan-workspace">
         <aside class="filters" aria-label="Trip plan filters">
@@ -68,11 +57,11 @@
             </select>
           </label>
           <label>
-            ETA From
+            ETD From
             <input id="fromDate" type="date" />
           </label>
           <label>
-            ETA To
+            ETD To
             <input id="toDate" type="date" />
           </label>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
@@ -93,11 +82,10 @@
                   <th>Plan</th>
                   <th>Status</th>
                   <th>Type</th>
-                  <th>ETA</th>
+                  <th>ETD</th>
                   <th>Stops</th>
                   <th>Destinations</th>
                   <th>Transport</th>
-                  <th>Min Buffer</th>
                   <th>Countdown</th>
                   <th>Actions</th>
                 </tr>
@@ -122,6 +110,7 @@
     </main>
 
     <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
     <script src="../scripts/trip-plans-list.js"></script>
   </body>
 </html>

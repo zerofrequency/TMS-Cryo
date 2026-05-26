@@ -14,6 +14,7 @@ const state = {
   },
   selectedKey: null,
   viewMode: "table",
+  timelineAutoScrollPending: false,
   calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   sortKey: "scheduleTime",
   sortDirection: "asc",
@@ -29,7 +30,7 @@ const state = {
 };
 
 const TRIP_PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
-const ETA_PERIODS = {
+const ETD_PERIODS = {
   "00-03": { label: "00:00-03:00" },
   "03-06": { label: "03:00-06:00" },
   "06-09": { label: "06:00-09:00" },
@@ -60,9 +61,6 @@ const els = {
   toDate: document.getElementById("toDate"),
   clearFilters: document.getElementById("clearFilters"),
   totalCount: document.getElementById("totalCount"),
-  chinaClock: document.getElementById("chinaClock"),
-  laClock: document.getElementById("laClock"),
-  nyClock: document.getElementById("nyClock"),
   upcomingCount: document.getElementById("upcomingCount"),
   todayCount: document.getElementById("todayCount"),
   issueCount: document.getElementById("issueCount"),
@@ -71,8 +69,10 @@ const els = {
   importChanges: document.getElementById("importChanges"),
   tableViewButton: document.getElementById("tableViewButton"),
   calendarViewButton: document.getElementById("calendarViewButton"),
+  timelineViewButton: document.getElementById("timelineViewButton"),
   tableView: document.getElementById("tableView"),
   calendarView: document.getElementById("calendarView"),
+  timelineView: document.getElementById("timelineView"),
   prevMonthButton: document.getElementById("prevMonthButton"),
   nextMonthButton: document.getElementById("nextMonthButton"),
   calendarTitle: document.getElementById("calendarTitle"),
@@ -115,8 +115,6 @@ async function boot() {
   loadSupabaseConfig();
   await loadRecords();
   bindEvents();
-  renderClocks();
-  setInterval(renderClocks, 1000);
   render();
 }
 
@@ -138,6 +136,7 @@ function bindEvents() {
   els.exportButton.addEventListener("click", exportCsv);
   els.tableViewButton.addEventListener("click", () => setViewMode("table"));
   els.calendarViewButton.addEventListener("click", () => setViewMode("calendar"));
+  els.timelineViewButton.addEventListener("click", () => setViewMode("timeline"));
   els.prevMonthButton.addEventListener("click", () => shiftCalendarMonth(-1));
   els.nextMonthButton.addEventListener("click", () => shiftCalendarMonth(1));
   els.searchInput.addEventListener("input", (event) => setFilter("search", event.target.value));
@@ -309,7 +308,7 @@ async function loadRecordsFromSupabase() {
 }
 
 async function loadTripPlansByIsa() {
-  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=id,plan_name,plan_type,plan_status,eta_date,eta_period,transport_mode,stops,updated_at&order=eta_at.desc", { method: "GET" });
+  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=id,plan_name,plan_type,plan_status,etd_date,etd_period,transport_mode,stops,updated_at&order=etd_at.desc", { method: "GET" });
   const byIsa = new Map();
   (rows || []).forEach((row) => {
     const status = normalizeTripPlanStatus(row.plan_status);
@@ -319,8 +318,8 @@ async function loadTripPlansByIsa() {
       name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
       type: clean(row.plan_type),
       status,
-      etaDate: clean(row.eta_date),
-      etaPeriod: clean(row.eta_period),
+      etaDate: clean(row.etd_date),
+      etaPeriod: clean(row.etd_period),
       transport: clean(row.transport_mode),
       stops: Array.isArray(row.stops) ? row.stops : [],
       updatedAt: clean(row.updated_at),
@@ -518,20 +517,21 @@ function rowsToRecords(rows, sourceName) {
   if (!rows.length) return [];
   const headers = rows[0].map((header) => normalizeHeader(header));
   return rows.slice(1).map((row) => {
-    const value = (label) => {
-      const index = headers.indexOf(normalizeHeader(label));
+    const value = (...labels) => {
+      const normalizedLabels = labels.map((label) => normalizeHeader(label));
+      const index = headers.findIndex((header) => normalizedLabels.includes(header));
       return index >= 0 ? clean(row[index]) : "";
     };
 
     const record = {
-      fc: value("Destination FC") || value("FC"),
-      appointmentId: value("Appointment ID") || value("ISA"),
-      trailer: value("Trailer Number") || value("Trailer"),
-      referenceCode: value("Appointment Reference Code") || value("Reference Code"),
-      crdd: value("Carrier Requested Delivery Date") || value("CRDD"),
-      status: value("Status"),
-      scheduleTime: value("Scheduled Time") || value("Schedule Time"),
-      loadType: normalizeLoadType(value("Load Type")),
+      fc: value("Destination FC", "FC", "Destination"),
+      appointmentId: value("Appointment ID", "ISA", "Appointment Id"),
+      trailer: value("Trailer Number", "Trailer"),
+      referenceCode: value("Appointment Reference Code", "Reference Code", "Reference"),
+      crdd: value("Carrier Requested Delivery Date", "CRDD", "Requested Delivery Date"),
+      status: value("Status", "Appointment Status"),
+      scheduleTime: value("Scheduled Time", "Schedule Time", "Appointment Time"),
+      loadType: normalizeLoadType(value("Load Type", "Freight Load Type")),
       source: sourceName,
       lastUpdated: new Date().toISOString(),
       notes: "",
@@ -616,7 +616,7 @@ function makeKey(record) {
 }
 
 function normalizeHeader(value) {
-  return clean(value).toLowerCase().replace(/\s+/g, " ");
+  return clean(value).replace(/^\uFEFF/, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function clean(value) {
@@ -641,6 +641,7 @@ function clearFilters() {
 
 function setViewMode(mode) {
   state.viewMode = mode;
+  if (mode === "timeline") state.timelineAutoScrollPending = true;
   render();
 }
 
@@ -728,6 +729,7 @@ function render() {
   renderRows();
   renderViewMode();
   renderCalendar();
+  renderTimeline();
   renderDetail();
 }
 
@@ -747,27 +749,8 @@ function renderImportChanges() {
   els.importChanges.classList.remove("hidden");
 }
 
-function renderClocks() {
-  const now = new Date();
-  els.chinaClock.textContent = formatClock(now, "Asia/Shanghai");
-  els.laClock.textContent = formatClock(now, "America/Los_Angeles");
-  els.nyClock.textContent = formatClock(now, "America/New_York");
-}
-
-function formatClock(date, timeZone) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZoneName: "short",
-  }).format(date);
-}
-
 function renderStats() {
+  if (!els.totalCount || !els.upcomingCount || !els.todayCount || !els.issueCount) return;
   const now = new Date();
   const todayKey = dateKey(now);
   els.totalCount.textContent = state.records.length;
@@ -776,8 +759,8 @@ function renderStats() {
     return date && date >= startOfDay(now);
   }).length;
   els.todayCount.textContent = state.records.filter((record) => {
-    const date = parseAppointmentDate(record.scheduleTime);
-    return date && dateKey(date) === todayKey;
+    const key = scheduleDateKey(record.scheduleTime);
+    return key && key === todayKey;
   }).length;
   els.issueCount.textContent = state.records.filter((record) => isIssueStatus(record.status)).length;
 }
@@ -853,10 +836,13 @@ function renderRows() {
 
 function renderViewMode() {
   const isCalendar = state.viewMode === "calendar";
-  els.tableView.classList.toggle("hidden", isCalendar);
+  const isTimeline = state.viewMode === "timeline";
+  els.tableView.classList.toggle("hidden", isCalendar || isTimeline);
   els.calendarView.classList.toggle("hidden", !isCalendar);
-  els.tableViewButton.classList.toggle("active", !isCalendar);
+  els.timelineView.classList.toggle("hidden", !isTimeline);
+  els.tableViewButton.classList.toggle("active", !isCalendar && !isTimeline);
   els.calendarViewButton.classList.toggle("active", isCalendar);
+  els.timelineViewButton.classList.toggle("active", isTimeline);
 }
 
 function renderCalendar() {
@@ -865,13 +851,13 @@ function renderCalendar() {
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   const gridStart = new Date(monthStart);
   gridStart.setDate(monthStart.getDate() - monthStart.getDay());
-  const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
+  const monthKey = `${monthStart.getFullYear()}-${pad2(monthStart.getMonth() + 1)}`;
   const recordsByDay = new Map();
 
   records.forEach((record) => {
     const date = parseAppointmentDate(record.scheduleTime);
     if (!date) return;
-    const key = dateKey(date);
+    const key = scheduleDateKey(record.scheduleTime) || dateKey(date);
     const items = recordsByDay.get(key) || [];
     items.push(record);
     recordsByDay.set(key, items);
@@ -890,15 +876,17 @@ function renderCalendar() {
     const date = new Date(gridStart);
     date.setDate(gridStart.getDate() + index);
     const key = dateKey(date);
-    const isCurrentMonth = `${date.getFullYear()}-${date.getMonth()}` === monthKey;
+    const isCurrentMonth = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}` === monthKey;
     const isToday = key === dateKey(new Date());
     const appointments = (recordsByDay.get(key) || []).sort(compareRecords);
     const items = appointments.map((record) => {
       const selected = record.key === state.selectedKey ? " selected" : "";
       const loadTypeMeta = getLoadTypeMeta(record.loadType);
+      const matchedPlan = tripPlanForRecord(record);
+      const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
       const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
       return `
-        <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+        <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
           <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
           <small>
             <span>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</span>
@@ -924,8 +912,110 @@ function renderCalendar() {
   });
 }
 
+function renderTimeline() {
+  const records = getFilteredRecords()
+    .filter((record) => parseAppointmentDate(record.scheduleTime))
+    .sort((a, b) => (parseAppointmentDate(a.scheduleTime)?.getTime() || 0) - (parseAppointmentDate(b.scheduleTime)?.getTime() || 0));
+  const groups = new Map();
+  records.forEach((record) => {
+    const key = scheduleDateKey(record.scheduleTime) || dateKey(parseAppointmentDate(record.scheduleTime));
+    const items = groups.get(key) || [];
+    items.push(record);
+    groups.set(key, items);
+  });
+
+  if (!records.length) {
+    els.timelineView.innerHTML = '<div class="timeline-empty">No scheduled appointments match the current filters.</div>';
+    return;
+  }
+
+  els.timelineView.innerHTML = `
+    <div class="timeline-track" aria-label="Horizontal appointment timeline">
+      ${Array.from(groups.entries()).map(([key, items]) => `
+        <section class="timeline-day" data-date-key="${escapeAttr(key)}">
+          <header class="timeline-day-head">
+            <strong>${escapeHtml(formatTimelineDate(key))}</strong>
+            <span>${items.length} appointment${items.length === 1 ? "" : "s"}</span>
+          </header>
+          <div class="timeline-axis" aria-hidden="true"></div>
+          <div class="timeline-items">
+            ${items.map(renderTimelineItem).join("")}
+          </div>
+        </section>
+      `).join("")}
+    </div>
+  `;
+
+  els.timelineView.querySelectorAll("button[data-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedKey = button.dataset.key;
+      render();
+    });
+  });
+  if (state.viewMode === "timeline" && state.timelineAutoScrollPending) {
+    state.timelineAutoScrollPending = false;
+    scrollTimelineToToday(els.timelineView);
+  }
+}
+
+function scrollTimelineToToday(container) {
+  requestAnimationFrame(() => {
+    const todayKey = dateKey(new Date());
+    const days = [...container.querySelectorAll(".timeline-day[data-date-key]")];
+    const target = days.find((day) => day.dataset.dateKey === todayKey)
+      || days.find((day) => day.dataset.dateKey > todayKey)
+      || days[0];
+    if (!target) return;
+    container.scrollLeft = Math.max(target.offsetLeft - 16, 0);
+  });
+}
+
+function renderTimelineItem(record) {
+  const selected = record.key === state.selectedKey ? " selected" : "";
+  const loadTypeMeta = getLoadTypeMeta(record.loadType);
+  const matchedPlan = tripPlanForRecord(record);
+  const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
+  const tripStatus = matchedPlan ? `
+    <span class="timeline-trip status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}">
+      ${escapeHtml(matchedPlan.status)}
+    </span>
+  ` : "";
+  return `
+    <button class="timeline-item load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}">
+      <time>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</time>
+      <div class="timeline-item-body">
+        <div class="timeline-item-main">
+          <strong>${escapeHtml(record.fc || "-")}</strong>
+          <span class="timeline-isa">${escapeHtml(record.appointmentId || record.referenceCode || "-")}</span>
+        </div>
+        <div class="timeline-item-meta">
+          <span class="status-pill ${statusClass(record.status)}">${escapeHtml(record.status || "Unknown")}</span>
+          <span class="timeline-load">${escapeHtml(record.loadType || "Unassigned")}</span>
+          ${tripStatus}
+        </div>
+      </div>
+    </button>
+  `;
+}
+
 function calendarPrimaryLabel(record) {
   return `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
+}
+
+function formatTimelineDate(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const today = dateKey(new Date());
+  const tomorrowDate = new Date();
+  tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+  if (key === today) return "Today";
+  if (key === dateKey(tomorrowDate)) return "Tomorrow";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function calendarTypeLabel(record) {
@@ -934,15 +1024,19 @@ function calendarTypeLabel(record) {
 
 function calendarTimeLabel(value) {
   const text = clean(value);
+  const match = text.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s+(\d{1,2}):(\d{2})(?:\s+([A-Z]{2,4}))?/);
+  if (match) {
+    const [, hour, minute, zone] = match;
+    const time = `${pad2(hour)}:${minute}`;
+    return zone ? `${time} ${zone}` : time;
+  }
   const date = parseAppointmentDate(value);
   if (!date) return text || "-";
-  const time = new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   }).format(date);
-  const zone = text.match(/\b([A-Z]{2,4})\b\s*$/)?.[1] || "";
-  return zone ? `${time} ${zone}` : time;
 }
 
 function formatLosAngelesTime(value) {
@@ -998,7 +1092,7 @@ function renderDetailTripPlan(record) {
     </div>
     <dl class="matched-plan-meta">
       <div><dt>Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
-      <div><dt>ETA</dt><dd>${escapeHtml(formatTripPlanEta(plan))}</dd></div>
+      <div><dt>ETD</dt><dd>${escapeHtml(formatTripPlanEta(plan))}</dd></div>
       <div><dt>Stop</dt><dd>${escapeHtml(stop.stop_number || "-")}</dd></div>
       <div><dt>Destination</dt><dd>${escapeHtml(stop.destination || "-")}</dd></div>
       <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
@@ -1136,7 +1230,7 @@ function tripPlanStatusClass(status) {
 
 function formatTripPlanEta(plan) {
   if (!plan.etaDate) return "-";
-  const period = ETA_PERIODS[plan.etaPeriod]?.label || plan.etaPeriod || "";
+  const period = ETD_PERIODS[plan.etaPeriod]?.label || plan.etaPeriod || "";
   return `${plan.etaDate} ${period}`.trim();
 }
 
@@ -1145,7 +1239,18 @@ function isIssueStatus(status) {
 }
 
 function dateKey(date) {
-  return [date.getFullYear(), date.getMonth(), date.getDate()].join("-");
+  return [date.getFullYear(), pad2(date.getMonth() + 1), pad2(date.getDate())].join("-");
+}
+
+function scheduleDateKey(value) {
+  const match = clean(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (!match) return "";
+  const [, month, day, year] = match;
+  return [year, pad2(month), pad2(day)].join("-");
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
 }
 
 function startOfDay(date) {

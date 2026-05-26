@@ -9,11 +9,19 @@
   </head>
   <body>
     <nav class="site-nav" aria-label="Primary navigation">
-      <a class="site-brand" href="./index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+      <div class="site-nav-left">
+        <a class="site-brand" href="./index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
       <div class="site-nav-links">
         <a class="site-nav-link" href="./index.html">Home</a>
         <a class="site-nav-link active" href="./appts.html">Appt</a>
         <a class="site-nav-link" href="./pages/trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./pages/resources.html">Resources</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -34,25 +42,6 @@
           <button id="exportButton" class="button" type="button">Export CSV</button>
         </div>
       </header>
-
-      <section class="stats" aria-label="Appointment summary">
-        <article>
-          <span>Total</span>
-          <strong id="totalCount">0</strong>
-        </article>
-        <article>
-          <span>Upcoming</span>
-          <strong id="upcomingCount">0</strong>
-        </article>
-        <article>
-          <span>Today</span>
-          <strong id="todayCount">0</strong>
-        </article>
-        <article>
-          <span>Issues</span>
-          <strong id="issueCount">0</strong>
-        </article>
-      </section>
 
       <section class="workspace">
         <aside class="filters" aria-label="Filters">
@@ -94,15 +83,11 @@
             <div>
               <h2>Appointment List</h2>
               <p id="resultCount">No records</p>
-              <div class="compact-clocks" aria-label="Current time zones">
-                <span>CN <strong id="chinaClock">--</strong></span>
-                <span>LA <strong id="laClock">--</strong></span>
-                <span>NY <strong id="nyClock">--</strong></span>
-              </div>
             </div>
             <div class="view-controls" aria-label="View mode">
               <button id="tableViewButton" class="view-button active" type="button">Table</button>
               <button id="calendarViewButton" class="view-button" type="button">Calendar</button>
+              <button id="timelineViewButton" class="view-button" type="button">Timeline</button>
             </div>
             <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Configure Supabase for cloud sync.</div>
           </div>
@@ -131,6 +116,7 @@
             </div>
             <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
           </div>
+          <div id="timelineView" class="timeline-view hidden" aria-label="Appointment timeline"></div>
           <div id="emptyState" class="empty-state">
             <h3>No appointments loaded</h3>
             <p>Upload an Amazon Carrier Central CSV or XLSX download to begin.</p>
@@ -229,6 +215,7 @@
     </main>
 
     <script src="./supabase-config.js"></script>
+    <script src="./scripts/clocks.js"></script>
     <script src="./scripts/appointments.js"></script>
   </body>
 </html>

@@ -36,6 +36,8 @@ CSV/XLSX uploads are merged by ISA and saved to Supabase when `supabase-config.j
 
 Run `sql/supabase-schema.sql` in the Supabase SQL editor before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data and weekly FC appointment tables. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans. The current direct-browser setup uses the anon key and an open personal-use RLS policy. Tighten this later when adding Supabase Auth.
 
+Run `sql/supabase-resources-schema.sql` to add Fleet, Dock, and Loading Crew resource tables plus their assignment tables.
+
 Create and edit `supabase-config.js`:
 
 ```js
@@ -53,9 +55,31 @@ Do not use the `service_role` key in this file.
 
 ## Trip plans
 
-`pages/trip-plans.html` is the outbound trip plan review page. It shows plan status, ETA, stops, destinations, transport, and minimum time buffer.
+`pages/trip-plans.html` is the outbound trip plan review page. It shows plan status, ETD, stops, destinations, transport, and minimum time buffer.
 
-`pages/create-trip-plans.html` creates outbound trip plans. A plan can be single-drop, two-drop, three-drop, or four-drop. Each stop can bind to an existing ISA or use manually entered private-address appointment information. The page records ETA, ISA/reference, destination, transport, transit days, appointment time, and time buffer.
+`pages/trip-plan-detail.html` shows a single trip plan with a stage flow for planned, waiting, loading, in transit, delivered, and voided. Open it from the **View** button in the Trip Plans detail panel.
+
+`pages/create-trip-plans.html` creates outbound trip plans. A plan can be single-drop, two-drop, three-drop, or four-drop. Each stop can bind to an existing ISA or use manually entered private-address appointment information. The page records ETD, ISA/reference, destination, transport, transit days, appointment time, and time buffer.
+
+## Resources
+
+`pages/resources.html` is the Resource Dashboard. It shows Fleet, Dock, and Loading Crew availability, occupancy, and active trip-plan usage.
+
+`pages/resource-maintain.html` maintains Fleet, Dock, and Loading Crew base records only. It does not assign resources to trips.
+
+Resource assignment is handled in `pages/trip-plan-detail.html`:
+
+- Planned stage assigns Fleet
+- Waiting stage assigns Dock
+- Loading stage assigns Loading Crew
+
+The resource module uses three base tables plus three assignment tables:
+
+- `fleet_resources` and `fleet_assignments`
+- `dock_resources` and `dock_assignments`
+- `loading_crews` and `loading_crew_assignments`
+
+Dock occupancy is derived from active dock assignments. Creating an active dock assignment in a trip plan marks it occupied in the dashboard; releasing or cancelling that assignment makes the dock available again.
 
 ## Folder structure
 

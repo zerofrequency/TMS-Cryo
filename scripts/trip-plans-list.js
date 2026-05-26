@@ -3,7 +3,7 @@
 
   const TRIP_TABLE = "trip_plans";
   const PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
-  const ETA_PERIODS = {
+  const ETD_PERIODS = {
     "00-03": { label: "00:00-03:00", end: "03:00" },
     "03-06": { label: "03:00-06:00", end: "06:00" },
     "06-09": { label: "06:00-09:00", end: "09:00" },
@@ -92,7 +92,7 @@
   async function loadPlans() {
     try {
       setCloudStatus("Loading Supabase", "");
-      const rows = await supabaseRequest(`${TRIP_TABLE}?select=*&order=eta_at.desc`);
+      const rows = await supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
       state.plans = rows.map(normalizePlan);
       fillTypeFilter();
       if (!state.selectedId && state.plans.length) state.selectedId = state.plans[0].id;
@@ -113,6 +113,7 @@
   }
 
   function renderStats() {
+    if (!els.totalCount || !els.activeCount || !els.inTransitCount || !els.issueCount) return;
     const activePlans = state.plans.filter((plan) => plan.status !== "voided");
     els.totalCount.textContent = state.plans.length;
     els.activeCount.textContent = activePlans.length;
@@ -125,9 +126,6 @@
     els.emptyState.classList.toggle("hidden", plans.length > 0);
     els.planRows.innerHTML = plans.map((plan) => {
       const stops = Array.isArray(plan.stops) ? plan.stops : [];
-      const destinations = compactUnique(stops.map((stop) => stop.destination)).join(", ") || "-";
-      const buffer = minBuffer(plan);
-      const countdown = nextAppointmentCountdown(plan);
       return `
         <tr class="${plan.id === state.selectedId ? "selected-row" : ""}" data-plan-id="${escapeAttr(plan.id)}">
           <td>
@@ -142,14 +140,38 @@
           <td>${escapeHtml(plan.type || "-")}</td>
           <td>${escapeHtml(formatEta(plan))}</td>
           <td>${stops.length}</td>
-          <td>${escapeHtml(destinations)}</td>
+          <td>${renderDestinationLines(stops)}</td>
           <td>${escapeHtml(plan.transport || "-")}</td>
-          <td><span class="${bufferClass(buffer)}">${escapeHtml(formatBuffer(buffer))}</span></td>
-          <td><span class="${countdownClass(countdown)}">${escapeHtml(formatCountdown(countdown))}</span></td>
-          <td><a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a></td>
+          <td>${renderCountdownLines(stops)}</td>
+          <td>
+            <div class="row-actions">
+              <a class="button compact view-plan-link" href="./trip-plan-detail.html?id=${encodeURIComponent(plan.id)}">View</a>
+              <a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a>
+            </div>
+          </td>
         </tr>
       `;
     }).join("");
+  }
+
+  function renderDestinationLines(stops) {
+    if (!stops.length) return "-";
+    return `<div class="cell-lines">${stops.map((stop) => `
+      <div class="cell-line">${escapeHtml(stop.destination || "-")}</div>
+    `).join("")}</div>`;
+  }
+
+  function renderCountdownLines(stops) {
+    if (!stops.length) return "-";
+    return `<div class="cell-lines countdown-lines">${stops.map((stop) => {
+      const countdown = stopCountdown(stop);
+      return `
+        <div class="cell-line countdown-line">
+          <small>${escapeHtml(clean(stop.schedule_time) || "-")}</small>
+          <span class="${countdownClass(countdown)}">${escapeHtml(formatCountdown(countdown))}</span>
+        </div>
+      `;
+    }).join("")}</div>`;
   }
 
   function renderDetail() {
@@ -167,14 +189,16 @@
           <span class="fc-badge">${escapeHtml(plan.status)}</span>
           <h2>${escapeHtml(plan.name)}</h2>
         </div>
-        <a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a>
+        <div class="detail-actions">
+          <a class="button compact view-plan-link" href="./trip-plan-detail.html?id=${encodeURIComponent(plan.id)}">View</a>
+          <a class="button compact edit-button" href="./create-trip-plans.html?edit=${encodeURIComponent(plan.id)}">Edit</a>
+        </div>
       </div>
       <dl class="meta">
         <div><dt>Plan Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
-        <div><dt>ETA</dt><dd>${escapeHtml(formatEta(plan))}</dd></div>
+        <div><dt>ETD</dt><dd>${escapeHtml(formatEta(plan))}</dd></div>
         <div><dt>Plan Date</dt><dd>${escapeHtml(plan.planDate || "-")}</dd></div>
         <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
-        <div><dt>Min Buffer</dt><dd>${escapeHtml(formatBuffer(minBuffer(plan)))}</dd></div>
         <div><dt>Countdown</dt><dd>${escapeHtml(formatCountdown(nextAppointmentCountdown(plan)))}</dd></div>
         <div><dt>Updated</dt><dd>${escapeHtml(formatDateTime(plan.updatedAt))}</dd></div>
       </dl>
@@ -260,9 +284,9 @@
       type: clean(row.plan_type),
       status: normalizeStatus(row.plan_status),
       planDate: clean(row.plan_date),
-      etaDate: clean(row.eta_date),
-      etaPeriod: clean(row.eta_period),
-      etaAt: clean(row.eta_at),
+      etaDate: clean(row.etd_date),
+      etaPeriod: clean(row.etd_period),
+      etaAt: clean(row.etd_at),
       transport: clean(row.transport_mode),
       notes: clean(row.notes),
       stops: Array.isArray(row.stops) ? row.stops : [],
@@ -356,7 +380,7 @@
 
   function formatEta(plan) {
     if (!plan.etaDate) return "--";
-    const period = ETA_PERIODS[plan.etaPeriod];
+    const period = ETD_PERIODS[plan.etaPeriod];
     if (!period) return `${plan.etaDate} ${plan.etaPeriod || ""}`.trim();
     return `${plan.etaDate} ${period.label}`;
   }

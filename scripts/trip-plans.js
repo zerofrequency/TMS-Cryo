@@ -4,6 +4,7 @@
   const APPOINTMENTS_TABLE = "appointments";
   const FC_TABLE = "fba_fcs";
   const TRIP_TABLE = "trip_plans";
+  const BINDINGS_TABLE = "trip_plan_isa_bindings";
   const els = {
     cloudStatus: document.getElementById("cloudStatus"),
     tripForm: document.getElementById("tripForm"),
@@ -17,9 +18,6 @@
     planNotes: document.getElementById("planNotes"),
     saveTripPlanButton: document.getElementById("saveTripPlanButton"),
     clearFormButton: document.getElementById("clearFormButton"),
-    prevMonthButton: document.getElementById("prevMonthButton"),
-    nextMonthButton: document.getElementById("nextMonthButton"),
-    calendarTitle: document.getElementById("calendarTitle"),
     calendarSummary: document.getElementById("calendarSummary"),
     calendarGrid: document.getElementById("calendarGrid"),
     stopTemplate: document.getElementById("stopTemplate"),
@@ -36,10 +34,14 @@
     fcs: new Map(),
     plans: [],
     calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+    timelineAutoScrolled: false,
     editingPlanId: "",
     editApplied: false,
+    planNameTouched: false,
+    updatingPlanName: false,
+    planNameSuffix: randomNameSuffix(),
   };
-  const ETA_PERIODS = {
+  const ETD_PERIODS = {
     "00-03": { label: "00:00-03:00", endHour: 3 },
     "03-06": { label: "03:00-06:00", endHour: 6 },
     "06-09": { label: "06:00-09:00", endHour: 9 },
@@ -71,12 +73,19 @@
 
   function bindEvents() {
     els.planType.addEventListener("change", renderStops);
-    els.etaDate.addEventListener("change", updateBuffers);
+    els.planName.addEventListener("input", () => {
+      if (!state.updatingPlanName) {
+        state.planNameTouched = Boolean(clean(els.planName.value));
+        els.planName.dataset.autoName = "false";
+      }
+    });
+    els.etaDate.addEventListener("change", () => {
+      updateBuffers();
+      updateDefaultPlanName();
+    });
     els.etaPeriod.addEventListener("change", updateBuffers);
     els.tripForm.addEventListener("submit", saveTripPlan);
     els.clearFormButton.addEventListener("click", clearForm);
-    els.prevMonthButton.addEventListener("click", () => changeCalendarMonth(-1));
-    els.nextMonthButton.addEventListener("click", () => changeCalendarMonth(1));
     els.closeAppointmentModal.addEventListener("click", closeAppointmentModal);
     els.appointmentModal.addEventListener("click", (event) => {
       if (event.target === els.appointmentModal) closeAppointmentModal();
@@ -118,8 +127,9 @@
   async function loadPlans() {
     if (!state.supabase.enabled) return;
     try {
-      state.plans = await supabaseRequest(`${TRIP_TABLE}?select=*&order=eta_at.desc`);
+      state.plans = await supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
       applyEditPlanFromUrl();
+      renderAppointmentCalendar();
     } catch (error) {
       console.error(error);
       setCloudStatus(error.message, "error");
@@ -144,6 +154,7 @@
       applyAppointmentToStop(node);
     }
     updateBuffers();
+    updateDefaultPlanName();
   }
 
   function bindStopEvents(node) {
@@ -163,17 +174,23 @@
     node.querySelector(".stop-source").addEventListener("change", () => {
       updateStopMode(node);
       updateBuffers();
+      updateDefaultPlanName();
     });
     node.querySelector(".stop-isa").addEventListener("input", () => {
       applyAppointmentToStop(node);
       updateBuffers();
+      updateDefaultPlanName();
     });
     node.querySelector(".stop-isa").addEventListener("change", () => {
       applyAppointmentToStop(node);
       updateBuffers();
+      updateDefaultPlanName();
     });
     [".stop-schedule", ".stop-transit"].forEach((selector) => {
       node.querySelector(selector).addEventListener("input", updateBuffers);
+    });
+    [".manual-isa", ".stop-destination"].forEach((selector) => {
+      node.querySelector(selector).addEventListener("input", updateDefaultPlanName);
     });
   }
 
@@ -194,6 +211,7 @@
     node.querySelector(".stop-destination").value = appt.fc || "";
     node.querySelector(".stop-schedule").value = appt.scheduleTime || "";
     node.querySelector(".stop-transit").value = fc?.transit_days ?? "";
+    updateDefaultPlanName();
   }
 
   function bindAppointmentToStop(node, isa) {
@@ -204,6 +222,7 @@
     node.querySelector(".stop-isa").value = appt.isa;
     applyAppointmentToStop(node);
     updateBuffers();
+    updateDefaultPlanName();
     setCloudStatus(`Bound ISA ${appt.isa} to ${node.querySelector("h3").textContent}`, "connected");
   }
 
@@ -245,13 +264,13 @@
     }
     const etaAt = etaDateTime().toISOString();
     const payload = {
-      plan_name: clean(els.planName.value) || `${els.planType.value} ${els.etaDate.value}`,
+      plan_name: clean(els.planName.value) || generateDefaultPlanName(stops),
       plan_type: els.planType.value,
       plan_status: currentEditingPlan()?.plan_status || "Planned",
       plan_date: els.planDate.value || null,
-      eta_date: els.etaDate.value,
-      eta_period: els.etaPeriod.value,
-      eta_at: etaAt,
+      etd_date: els.etaDate.value,
+      etd_period: els.etaPeriod.value,
+      etd_at: etaAt,
       transport_mode: clean(els.transportMode.value),
       notes: clean(els.planNotes.value),
       stops,
@@ -265,13 +284,16 @@
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify(payload),
         });
+        await syncIsaBindings(state.editingPlanId, stops, payload.plan_status);
         setCloudStatus("Trip plan updated", "connected");
       } else {
-        await supabaseRequest(TRIP_TABLE, {
+        const inserted = await supabaseRequest(TRIP_TABLE, {
           method: "POST",
-          headers: { Prefer: "return=minimal" },
+          headers: { Prefer: "return=representation" },
           body: JSON.stringify(payload),
         });
+        const planId = clean(inserted?.[0]?.id);
+        if (planId) await syncIsaBindings(planId, stops, payload.plan_status);
         setCloudStatus("Trip plan saved", "connected");
       }
       await loadPlans();
@@ -282,10 +304,62 @@
     }
   }
 
+  async function syncIsaBindings(planId, stops, planStatus) {
+    if (!state.supabase.enabled || !planId) return;
+    if (normalizePlanStatus(planStatus) === "voided") return;
+
+    const desiredIsas = compactUnique((Array.isArray(stops) ? stops : [])
+      .filter((stop) => clean(stop.source) === "appointment")
+      .map((stop) => clean(stop.isa))
+      .filter(Boolean));
+
+    const existing = await supabaseRequest(`${BINDINGS_TABLE}?trip_plan_id=eq.${encodeURIComponent(planId)}&select=*`);
+    const byIsa = new Map(existing.map((row) => [clean(row.isa), row]));
+
+    const toReleaseRows = existing.filter((row) => (
+      clean(row.binding_status) === "active" && !desiredIsas.includes(clean(row.isa))
+    ));
+    for (const row of toReleaseRows) {
+      await supabaseRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({ binding_status: "released", updated_at: new Date().toISOString() }),
+      });
+    }
+
+    for (const isa of desiredIsas) {
+      const row = byIsa.get(isa);
+      if (row) {
+        if (clean(row.binding_status) !== "active") {
+          await supabaseRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
+            method: "PATCH",
+            headers: { Prefer: "return=minimal" },
+            body: JSON.stringify({ binding_status: "active", updated_at: new Date().toISOString() }),
+          });
+        }
+        continue;
+      }
+      try {
+        await supabaseRequest(BINDINGS_TABLE, {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({ isa, trip_plan_id: planId, binding_status: "active", updated_at: new Date().toISOString() }),
+        });
+      } catch (error) {
+        const msg = String(error && error.message ? error.message : error);
+        if (msg.includes("trip_plan_isa_bindings_one_active_isa_idx") || msg.toLowerCase().includes("duplicate key")) {
+          throw new Error(`ISA ${isa} is already bound to another active trip plan (void the plan to rebind).`);
+        }
+        throw error;
+      }
+    }
+  }
+
   function collectStops() {
     return Array.from(els.stopsContainer.querySelectorAll(".stop-card")).map((node, index) => {
       const source = node.querySelector(".stop-source").value;
       const isa = source === "appointment" ? node.querySelector(".stop-isa").value : clean(node.querySelector(".manual-isa").value);
+      const appointment = source === "appointment" ? appointmentByIsa(isa) : null;
       const destination = clean(node.querySelector(".stop-destination").value);
       const scheduleTime = clean(node.querySelector(".stop-schedule").value);
       const transitDays = numberOrNull(node.querySelector(".stop-transit").value);
@@ -296,11 +370,90 @@
         isa,
         destination,
         schedule_time: scheduleTime,
+        load_type: appointment ? clean(appointment.loadType) : "",
         transit_days: transitDays,
-        eta_at: etaDateTime().toISOString(),
+        etd_at: etaDateTime().toISOString(),
         time_buffer_hours: bufferHours,
       };
     });
+  }
+
+  function updateDefaultPlanName() {
+    if (state.planNameTouched && els.planName.dataset.autoName !== "true") return;
+    const name = generateDefaultPlanName();
+    state.updatingPlanName = true;
+    els.planName.value = name;
+    els.planName.dataset.autoName = "true";
+    state.updatingPlanName = false;
+  }
+
+  function generateDefaultPlanName(stops = null) {
+    const stopCodes = stops
+      ? stops.map((stop) => defaultStopCodeFromStop(stop))
+      : Array.from(els.stopsContainer.querySelectorAll(".stop-card")).map(defaultStopCodeFromNode);
+    return [formatEtdMonthDay(), ...stopCodes, state.planNameSuffix].map(clean).filter(Boolean).join("-");
+  }
+
+  function defaultStopCodeFromNode(node) {
+    const source = clean(node.querySelector(".stop-source").value);
+    if (source === "appointment") {
+      const appt = appointmentByIsa(node.querySelector(".stop-isa").value);
+      return clean(appt && appt.fc) || clean(node.querySelector(".stop-destination").value);
+    }
+    return stateCodeFromText(node.querySelector(".stop-destination").value)
+      || stateCodeFromText(node.querySelector(".manual-isa").value)
+      || `Stop${Number(node.dataset.index || 0) + 1}`;
+  }
+
+  function defaultStopCodeFromStop(stop) {
+    if (clean(stop.source) === "appointment") {
+      const appt = appointmentByIsa(stop.isa);
+      return clean(appt && appt.fc) || clean(stop.destination);
+    }
+    return stateCodeFromText(stop.destination) || stateCodeFromText(stop.isa) || `Stop${stop.stop_number || ""}`;
+  }
+
+  function formatEtdMonthDay() {
+    const value = clean(els.etaDate.value);
+    if (!value) return "";
+    const parts = value.split("-");
+    if (parts.length === 3) return `${parts[1]}/${parts[2]}`;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+  }
+
+  function randomNameSuffix() {
+    const random = window.crypto && window.crypto.getRandomValues
+      ? window.crypto.getRandomValues(new Uint16Array(1))[0]
+      : Math.floor(Math.random() * 65536);
+    return random.toString(16).toUpperCase().padStart(4, "0").slice(-4);
+  }
+
+  function suffixFromPlanName(value) {
+    const match = clean(value).match(/-([A-Fa-f0-9]{4})$/);
+    return match ? match[1].toUpperCase() : "";
+  }
+
+  function stateCodeFromText(value) {
+    const text = clean(value);
+    if (!text) return "";
+    const upper = text.toUpperCase();
+    const direct = upper.match(/\b(A[LKZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEINOST]|N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\b/);
+    if (direct) return direct[1];
+    const stateNames = {
+      ALABAMA: "AL", ALASKA: "AK", ARIZONA: "AZ", ARKANSAS: "AR", CALIFORNIA: "CA", COLORADO: "CO",
+      CONNECTICUT: "CT", DELAWARE: "DE", FLORIDA: "FL", GEORGIA: "GA", HAWAII: "HI", IDAHO: "ID",
+      ILLINOIS: "IL", INDIANA: "IN", IOWA: "IA", KANSAS: "KS", KENTUCKY: "KY", LOUISIANA: "LA",
+      MAINE: "ME", MARYLAND: "MD", MASSACHUSETTS: "MA", MICHIGAN: "MI", MINNESOTA: "MN", MISSISSIPPI: "MS",
+      MISSOURI: "MO", MONTANA: "MT", NEBRASKA: "NE", NEVADA: "NV", "NEW HAMPSHIRE": "NH",
+      "NEW JERSEY": "NJ", "NEW MEXICO": "NM", "NEW YORK": "NY", "NORTH CAROLINA": "NC",
+      "NORTH DAKOTA": "ND", OHIO: "OH", OKLAHOMA: "OK", OREGON: "OR", PENNSYLVANIA: "PA",
+      "RHODE ISLAND": "RI", "SOUTH CAROLINA": "SC", "SOUTH DAKOTA": "SD", TENNESSEE: "TN", TEXAS: "TX",
+      UTAH: "UT", VERMONT: "VT", VIRGINIA: "VA", WASHINGTON: "WA", "WEST VIRGINIA": "WV", WISCONSIN: "WI",
+      WYOMING: "WY",
+    };
+    return Object.entries(stateNames).find(([name]) => upper.includes(name))?.[1] || "";
   }
 
   function updateBuffers() {
@@ -326,7 +479,7 @@
 
   function etaDateTime() {
     const date = els.etaDate.value || new Date().toISOString().slice(0, 10);
-    const endHour = ETA_PERIODS[els.etaPeriod.value]?.endHour || 12;
+    const endHour = ETD_PERIODS[els.etaPeriod.value]?.endHour || 12;
     if (endHour === 24) {
       const nextDate = new Date(`${date}T00:00:00-07:00`);
       nextDate.setDate(nextDate.getDate() + 1);
@@ -375,15 +528,19 @@
     const stops = Array.isArray(plan.stops) ? plan.stops : [];
     state.editApplied = true;
     els.planName.value = clean(plan.plan_name);
+    state.planNameTouched = Boolean(clean(plan.plan_name));
+    els.planName.dataset.autoName = "false";
+    state.planNameSuffix = suffixFromPlanName(clean(plan.plan_name)) || randomNameSuffix();
     setSelectValue(els.planType, clean(plan.plan_type));
     els.planDate.value = clean(plan.plan_date);
-    els.etaDate.value = clean(plan.eta_date) || new Date().toISOString().slice(0, 10);
-    setSelectValue(els.etaPeriod, normalizeEtaPeriod(clean(plan.eta_period)) || "09-12");
+    els.etaDate.value = clean(plan.etd_date) || new Date().toISOString().slice(0, 10);
+    setSelectValue(els.etaPeriod, normalizeEtaPeriod(clean(plan.etd_period)) || "09-12");
     els.transportMode.value = clean(plan.transport_mode);
     els.planNotes.value = clean(plan.notes);
     renderStops();
     stops.forEach((stop, index) => populateStop(index, stop));
     updateBuffers();
+    updateDefaultPlanName();
     els.saveTripPlanButton.textContent = "Update Trip Plan";
     document.title = "Edit Trip Plan";
     document.querySelector("h1").textContent = "Edit Trip Plan";
@@ -424,62 +581,46 @@
     return value;
   }
 
-  function changeCalendarMonth(offset) {
-    state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + offset, 1);
-    renderAppointmentCalendar();
-  }
-
   function renderAppointmentCalendar() {
-    const monthStart = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), 1);
-    const gridStart = new Date(monthStart);
-    gridStart.setDate(monthStart.getDate() - monthStart.getDay());
-    const monthKey = `${monthStart.getFullYear()}-${monthStart.getMonth()}`;
     const recordsByDay = new Map();
+    const planStatusByIsa = buildPlanStatusByIsa();
 
     state.appointments.forEach((appt) => {
-      const date = parseCarrierTime(appt.scheduleTime);
-      if (!date) return;
-      const key = dateKey(date);
+      const key = scheduleDateKey(appt.scheduleTime);
+      if (!key) return;
       const items = recordsByDay.get(key) || [];
       items.push(appt);
       recordsByDay.set(key, items);
     });
 
-    els.calendarTitle.textContent = new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      year: "numeric",
-    }).format(monthStart);
     els.calendarSummary.textContent = `${state.appointments.length} appointments loaded`;
 
-    const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-      .map((day) => `<div class="calendar-weekday">${day}</div>`)
-      .join("");
+    els.calendarGrid.innerHTML = Array.from(recordsByDay.entries())
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, appointments]) => `
+        <section class="timeline-day" data-date-key="${escapeAttr(key)}">
+          <header class="timeline-day-head">
+            <strong>${escapeHtml(formatTimelineDate(key))}</strong>
+            <span>${appointments.length} appt${appointments.length === 1 ? "" : "s"}</span>
+          </header>
+          <div class="timeline-axis" aria-hidden="true"></div>
+          <div class="timeline-items">
+            ${appointments.sort(compareAppointments).map((appt) => `
+              <button class="calendar-appointment${planStatusByIsa.get(appt.isa) ? ` trip-bound status-${escapeAttr(statusClass(planStatusByIsa.get(appt.isa)))}` : ""}" type="button" draggable="true" data-isa="${escapeAttr(appt.isa)}" title="${escapeAttr(`${appt.isa} ${appt.fc}`)}">
+                <time>${escapeHtml(calendarTimeLabel(appt.scheduleTime))}</time>
+                <div>
+                  <strong>${escapeHtml(appt.fc || "-")}</strong>
+                  <small>
+                    <span>${escapeHtml(appt.isa || "-")}</span>
+                    <em>${escapeHtml(appt.loadType || "Unassigned")}</em>
+                  </small>
+                </div>
+              </button>
+            `).join("")}
+          </div>
+        </section>
+      `).join("") || '<p class="timeline-empty">No scheduled appointments loaded.</p>';
 
-    const days = Array.from({ length: 42 }, (_, index) => {
-      const date = new Date(gridStart);
-      date.setDate(gridStart.getDate() + index);
-      const key = dateKey(date);
-      const isCurrentMonth = `${date.getFullYear()}-${date.getMonth()}` === monthKey;
-      const isToday = key === dateKey(new Date());
-      const appointments = (recordsByDay.get(key) || []).sort(compareAppointments);
-      const items = appointments.map((appt) => `
-        <button class="calendar-appointment" type="button" draggable="true" data-isa="${escapeAttr(appt.isa)}" title="${escapeAttr(`${appt.isa} ${appt.fc}`)}">
-          <strong>${escapeHtml(appt.fc || "-")}</strong>
-          <small>
-            <span>${escapeHtml(calendarTimeLabel(appt.scheduleTime))}</span>
-            <em>${escapeHtml(appt.loadType || "Unassigned")}</em>
-          </small>
-        </button>
-      `).join("");
-      return `
-        <div class="calendar-day ${isCurrentMonth ? "" : "muted"} ${isToday ? "today" : ""}">
-          <div class="calendar-date">${date.getDate()}</div>
-          <div class="calendar-items">${items}</div>
-        </div>
-      `;
-    }).join("");
-
-    els.calendarGrid.innerHTML = dayLabels + days;
     els.calendarGrid.querySelectorAll("[data-isa]").forEach((button) => {
       button.addEventListener("dragstart", (event) => {
         event.dataTransfer.effectAllowed = "copy";
@@ -489,6 +630,42 @@
         openAppointmentModal(button.dataset.isa);
       });
     });
+
+    if (!state.timelineAutoScrolled) {
+      state.timelineAutoScrolled = true;
+      scrollTimelineToToday(els.calendarGrid);
+    }
+  }
+
+  function scrollTimelineToToday(container) {
+    requestAnimationFrame(() => {
+      const todayKey = dateKey(new Date());
+      const days = [...container.querySelectorAll(".timeline-day[data-date-key]")];
+      const target = days.find((day) => day.dataset.dateKey === todayKey)
+        || days.find((day) => day.dataset.dateKey > todayKey)
+        || days[0];
+      if (!target) return;
+      container.scrollLeft = Math.max(target.offsetLeft - 14, 0);
+    });
+  }
+
+  function buildPlanStatusByIsa() {
+    const map = new Map();
+    (Array.isArray(state.plans) ? state.plans : []).forEach((plan) => {
+      const status = normalizePlanStatus(plan.plan_status);
+      (Array.isArray(plan.stops) ? plan.stops : []).forEach((stop) => {
+        const isa = clean(stop.isa);
+        if (!isa) return;
+        map.set(isa, status);
+      });
+    });
+    return map;
+  }
+
+  function statusClass(status) {
+    const value = clean(status).toLowerCase();
+    if (!value) return "planned";
+    return value.replace(/\s+/g, "-");
   }
 
   function openAppointmentModal(isa) {
@@ -531,6 +708,9 @@
     const today = new Date().toISOString().slice(0, 10);
     els.planDate.value = today;
     els.etaDate.value = today;
+    state.planNameTouched = false;
+    state.planNameSuffix = randomNameSuffix();
+    els.planName.dataset.autoName = "true";
     if (state.editingPlanId) {
       state.editingPlanId = "";
       state.editApplied = false;
@@ -620,15 +800,28 @@
 
   function calendarTimeLabel(value) {
     const text = clean(value);
-    const date = parseCarrierTime(value);
-    if (!date) return text || "-";
-    const time = new Intl.DateTimeFormat("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(date);
-    const zone = text.match(/\b([A-Z]{2,4})\b\s*$/)?.[1] || "";
+    const match = text.match(/^\d{1,2}\/\d{1,2}\/\d{4}\s+(\d{1,2}):(\d{2})(?:\s+([A-Z]{2,4}))?/);
+    if (!match) return text || "-";
+    const [, hour, minute, zone] = match;
+    const time = `${String(hour).padStart(2, "0")}:${minute}`;
     return zone ? `${time} ${zone}` : time;
+  }
+
+  function scheduleDateKey(value) {
+    const match = clean(value).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (!match) return "";
+    const [, month, day, year] = match;
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function formatTimelineDate(key) {
+    const [year, month, day] = key.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return new Intl.DateTimeFormat("en-US", {
+      weekday: "short",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
   }
 
   function formatLosAngelesTime(value) {
@@ -653,6 +846,10 @@
   function numberOrNull(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function compactUnique(values) {
+    return Array.from(new Set((values || []).map(clean).filter(Boolean)));
   }
 
   function clean(value) {

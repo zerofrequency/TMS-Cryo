@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Resource Dashboard</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
+    <link rel="stylesheet" href="../styles/appointments.css" />
+    <link rel="stylesheet" href="../styles/resources.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link active" href="./resources.html">Resources</a>
+        <span class="site-nav-link disabled">Inventory</span>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
+
+    <main class="app-shell resources-shell">
+      <header class="topbar">
+        <div>
+          <h1>Resource Dashboard</h1>
+          <p>Monitor Fleet, Dock, and Loading Crew availability, occupancy, and assigned trip-plan usage.</p>
+        </div>
+        <div class="actions">
+          <a class="button primary" href="./resource-maintain.html">Maintain Resources</a>
+          <button id="refreshButton" class="button" type="button">Refresh</button>
+          <div id="cloudStatus" class="import-status">Checking Supabase</div>
+        </div>
+      </header>
+
+      <section class="resource-stats" aria-label="Resource summary">
+        <article>
+          <span>Total</span>
+          <strong id="totalCount">0</strong>
+        </article>
+        <article>
+          <span>Available</span>
+          <strong id="availableCount">0</strong>
+        </article>
+        <article>
+          <span>In Use</span>
+          <strong id="inUseCount">0</strong>
+        </article>
+        <article>
+          <span>Inactive</span>
+          <strong id="inactiveCount">0</strong>
+        </article>
+      </section>
+
+      <div class="resource-view-tabs" aria-label="Resource view selector">
+        <button class="resource-view-tab active" type="button" data-view="fleet">Fleet</button>
+        <button class="resource-view-tab" type="button" data-view="crew">Crew</button>
+        <button class="resource-view-tab" type="button" data-view="dock">Dock</button>
+      </div>
+
+      <section id="resourceDashboard" class="resource-dashboard" aria-label="Resource dashboard"></section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
+    <script src="../scripts/resources.js"></script>
+  </body>
+</html>
