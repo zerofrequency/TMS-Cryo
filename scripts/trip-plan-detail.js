@@ -13,7 +13,7 @@
       key: "planned",
       status: "Planned",
       label: "planned",
-      description: "Bind ISA records and prepare inventory and fleet records before dispatch.",
+      description: "Bind ISA records and prepare inventory and carrier records before dispatch.",
     },
     {
       key: "waiting",
@@ -296,7 +296,10 @@
       ${metaRow("Plan Date", plan.planDate || "-")}
       ${metaRow("Stops", String(plan.stops.length))}
       ${metaRowHtml("Destination", renderOverviewStops(plan), "overview-destination-row")}
+      ${metaRow("Carrier", activeCarrierLabel() || "-")}
       ${metaRow("Transport", plan.transport || "-")}
+      ${metaRow("Truck Number", plan.truckNumber || "-")}
+      ${metaRow("Trailer Number", plan.trailerNumber || "-")}
       ${metaRow("Min Buffer", formatBuffer(minBuffer(plan)))}
       ${metaRow("Updated", formatDateTime(plan.updatedAt))}
     `;
@@ -315,11 +318,11 @@
             <strong>Inventory</strong>
             <span>Inventory binding will be connected after the inventory module is created.</span>
           </article>
-          ${renderResourceRequirement("fleet", "Fleet")}
+          ${renderResourceRequirement("fleet", "Carrier")}
         </div>
       </section>
-      ${renderResourceAssignmentControl("fleet", "Fleet")}
-      ${renderResourceAssignmentSection("fleet", "Fleet Assignment")}
+      ${renderResourceAssignmentControl("fleet", "Carrier")}
+      ${renderResourceAssignmentSection("fleet", "Carrier Assignment")}
     `;
   }
 
@@ -391,6 +394,8 @@
         </header>
         <dl class="stage-metrics">
           ${metaRow("Transport", plan.transport || "-")}
+          ${metaRow("Truck Number", plan.truckNumber || "-")}
+          ${metaRow("Trailer Number", plan.trailerNumber || "-")}
           ${metaRow("ETD", formatEta(plan))}
           ${metaRow("Destinations", compactUnique(plan.stops.map((stop) => stop.destination)).join(", ") || "-")}
           ${metaRow("Min Buffer", formatBuffer(minBuffer(plan)))}
@@ -413,6 +418,8 @@
           <div><span>Stops</span><strong>${escapeHtml(String(plan.stops.length))}</strong></div>
           <div><span>Min Buffer</span><strong>${escapeHtml(formatBuffer(minBuffer(plan)))}</strong></div>
           <div><span>Transport</span><strong>${escapeHtml(plan.transport || "-")}</strong></div>
+          <div><span>Truck Number</span><strong>${escapeHtml(plan.truckNumber || "-")}</strong></div>
+          <div><span>Trailer Number</span><strong>${escapeHtml(plan.trailerNumber || "-")}</strong></div>
           <div><span>Notes</span><strong>${escapeHtml(plan.notes || "-")}</strong></div>
         </div>
       </section>
@@ -549,7 +556,7 @@
             <button class="button primary" type="button" data-assign-resource="${escapeAttr(type)}">Assign</button>
           </div>
         ` : `
-          <p class="stage-empty">No available ${escapeHtml(title.toLowerCase())} resources. Add or reactivate resources in <a href="./resource-maintain.html?type=${escapeAttr(type)}">Resource Maintain</a>.</p>
+          <p class="stage-empty">No available ${escapeHtml(title.toLowerCase())} resources. Add or reactivate resources in <a href="./resource-maintain.html?type=${escapeAttr(resourceTypeParam(type))}">Resource Maintain</a>.</p>
         `}
       </section>
     `;
@@ -601,6 +608,16 @@
 
   function activeResourceAssignment(type) {
     return planResourceAssignments(type).find((assignment) => clean(assignment.assignment_status) === "Active") || null;
+  }
+
+  function activeCarrierLabel() {
+    const assignment = activeResourceAssignment("fleet");
+    const resource = assignment ? resourceForAssignment("fleet", assignment) : null;
+    return resource ? resourceLabel("fleet", resource) : "";
+  }
+
+  function resourceTypeParam(type) {
+    return type === "fleet" ? "carrier" : type;
   }
 
   function planResourceAssignments(type) {
@@ -695,6 +712,8 @@
       etaPeriod: clean(row.etd_period),
       etaAt: clean(row.etd_at),
       transport: clean(row.transport_mode),
+      truckNumber: clean(row.truck_number),
+      trailerNumber: clean(row.trailer_number),
       notes: clean(row.notes),
       voidReason: clean(row.void_reason || row.voided_reason || row.void_reason_text),
       stops: Array.isArray(row.stops) ? row.stops : [],
@@ -832,7 +851,7 @@
     if (message.includes("duplicate key")) {
       if (type === "dock") return "This dock or trip plan already has an active assignment. Release the active assignment first.";
       if (type === "crew") return "This crew or trip plan already has an active assignment. Release the active assignment first.";
-      return "This trip plan already has an active fleet assignment. Release the active assignment first.";
+      return "This trip plan already has an active carrier assignment. Release the active assignment first.";
     }
     if (type === "crew" && message.toLowerCase().includes("occupied")) {
       return "This crew is already scheduled in the selected slot. Choose another slot or release the active assignment first.";

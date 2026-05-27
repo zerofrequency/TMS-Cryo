@@ -4,7 +4,7 @@
   const TRIP_TABLE = "trip_plans";
   const RESOURCE_TYPES = {
     fleet: {
-      title: "Fleet",
+      title: "Carrier",
       baseTable: "fleet_resources",
       assignmentTable: "fleet_assignments",
       resourceIdKey: "fleet_id",
@@ -185,10 +185,10 @@
       <article class="resource-dashboard-panel">
         <header class="resource-panel-head">
           <div>
-            <h2>Fleet Weekly Tasks</h2>
-            <p>${formatDate(days[0])} - ${formatDate(days[6])} · Active fleet assignments by trip ETD.</p>
+            <h2>Carrier Weekly Tasks</h2>
+            <p>${formatDate(days[0])} - ${formatDate(days[6])} · Active carrier assignments by trip ETD.</p>
           </div>
-          <a class="button compact neutral" href="./resource-maintain.html?type=fleet">Maintain Fleet</a>
+          <a class="button compact neutral" href="./resource-maintain.html?type=carrier">Maintain Carrier</a>
         </header>
         <div class="resource-week-calendar">
           ${days.map((day) => renderCalendarDay("fleet", day, assignmentsByDay.get(dateKey(day)) || [])).join("")}

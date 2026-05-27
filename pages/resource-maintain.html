@@ -23,6 +23,7 @@
         <a class="site-nav-link" href="../appts.html">Appt</a>
         <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
         <a class="site-nav-link active" href="./resources.html">Resources</a>
+        <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -33,7 +34,7 @@
         <div>
           <a class="back-link" href="./resources.html">Resource Dashboard</a>
           <h1>Resource Maintain</h1>
-          <p>Maintain Fleet, Dock, and Loading Crew base data. Trip-plan assignments are handled inside trip plan detail stages.</p>
+          <p>Maintain Carrier, Dock, and Loading Crew base data. Trip-plan assignments are handled inside trip plan detail stages.</p>
         </div>
         <div class="actions">
           <a class="button" href="./resources.html">Dashboard</a>
@@ -42,7 +43,7 @@
       </header>
 
       <section class="resource-tabs" aria-label="Resource type">
-        <button class="resource-tab active" type="button" data-resource="fleet">Fleet</button>
+        <button class="resource-tab active" type="button" data-resource="fleet">Carrier</button>
         <button class="resource-tab" type="button" data-resource="dock">Dock</button>
         <button class="resource-tab" type="button" data-resource="crew">Loading Crew</button>
       </section>
@@ -71,7 +72,7 @@
           <form id="resourceForm" class="resource-card" novalidate>
             <div class="resource-card-head">
               <div>
-                <h2 id="resourceFormTitle">Fleet Registration</h2>
+                <h2 id="resourceFormTitle">Carrier Registration</h2>
                 <p id="resourceFormSubtitle">Save base resource information.</p>
               </div>
               <button id="clearResourceForm" class="button compact neutral" type="button">Clear</button>
@@ -85,7 +86,7 @@
         <section class="resource-table-panel" aria-label="Resource list">
           <div class="resource-panel-head">
             <div>
-              <h2 id="resourceListTitle">Fleet List</h2>
+              <h2 id="resourceListTitle">Carrier List</h2>
               <p id="resourceListSummary">No resources loaded</p>
             </div>
             <button id="refreshButton" class="button compact neutral" type="button">Refresh</button>

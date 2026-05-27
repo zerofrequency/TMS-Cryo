@@ -14,6 +14,8 @@
     etaDate: document.getElementById("etaDate"),
     etaPeriod: document.getElementById("etaPeriod"),
     transportMode: document.getElementById("transportMode"),
+    truckNumber: document.getElementById("truckNumber"),
+    trailerNumber: document.getElementById("trailerNumber"),
     stopsContainer: document.getElementById("stopsContainer"),
     planNotes: document.getElementById("planNotes"),
     saveTripPlanButton: document.getElementById("saveTripPlanButton"),
@@ -200,18 +202,44 @@
     node.querySelector(".private-field").classList.toggle("hidden", !isPrivate);
     node.querySelector(".stop-isa").required = !isPrivate;
     node.querySelector(".manual-isa").required = isPrivate;
+    if (isPrivate) renderAppointmentContext(node, null);
     if (!isPrivate) applyAppointmentToStop(node);
   }
 
   function applyAppointmentToStop(node) {
     if (node.querySelector(".stop-source").value !== "appointment") return;
     const appt = appointmentByIsa(node.querySelector(".stop-isa").value);
+    renderAppointmentContext(node, appt);
     if (!appt) return;
     const fc = state.fcs.get(appt.fc);
     node.querySelector(".stop-destination").value = appt.fc || "";
     node.querySelector(".stop-schedule").value = appt.scheduleTime || "";
     node.querySelector(".stop-transit").value = fc?.transit_days ?? "";
     updateDefaultPlanName();
+  }
+
+  function renderAppointmentContext(node, appt) {
+    const context = node.querySelector(".appointment-context");
+    if (!context) return;
+    context.classList.toggle("hidden", !appt);
+    if (!appt) {
+      context.innerHTML = "";
+      return;
+    }
+    context.innerHTML = `
+      <div>
+        <span>FC</span>
+        <strong>${escapeHtml(appt.fc || "-")}</strong>
+      </div>
+      <div>
+        <span>Schedule</span>
+        <strong>${escapeHtml(appt.scheduleTime || "-")}</strong>
+      </div>
+      <div>
+        <span>Load Type</span>
+        <strong>${escapeHtml(appt.loadType || "-")}</strong>
+      </div>
+    `;
   }
 
   function bindAppointmentToStop(node, isa) {
@@ -272,6 +300,8 @@
       etd_period: els.etaPeriod.value,
       etd_at: etaAt,
       transport_mode: clean(els.transportMode.value),
+      truck_number: clean(els.truckNumber.value),
+      trailer_number: clean(els.trailerNumber.value),
       notes: clean(els.planNotes.value),
       stops,
       updated_at: new Date().toISOString(),
@@ -536,6 +566,8 @@
     els.etaDate.value = clean(plan.etd_date) || new Date().toISOString().slice(0, 10);
     setSelectValue(els.etaPeriod, normalizeEtaPeriod(clean(plan.etd_period)) || "09-12");
     els.transportMode.value = clean(plan.transport_mode);
+    els.truckNumber.value = clean(plan.truck_number);
+    els.trailerNumber.value = clean(plan.trailer_number);
     els.planNotes.value = clean(plan.notes);
     renderStops();
     stops.forEach((stop, index) => populateStop(index, stop));

@@ -786,7 +786,21 @@ function uniqueValues(field) {
 function renderRows() {
   const records = getFilteredRecords();
   els.resultCount.textContent = `${records.length} visible of ${state.records.length} records`;
-  els.emptyState.style.display = state.records.length ? "none" : "block";
+  if (!state.records.length) {
+    els.emptyState.innerHTML = `
+      <h3>No appointments loaded</h3>
+      <p>Upload an Amazon Carrier Central CSV or XLSX download to begin.</p>
+    `;
+    els.emptyState.style.display = "block";
+  } else if (!records.length) {
+    els.emptyState.innerHTML = `
+      <h3>No matching appointments</h3>
+      <p>Adjust search or clear filters to see more results.</p>
+    `;
+    els.emptyState.style.display = "block";
+  } else {
+    els.emptyState.style.display = "none";
+  }
   els.appointmentRows.innerHTML = records.map((record) => {
     const selected = record.key === state.selectedKey ? "selected" : "";
     const loadTypeMeta = getLoadTypeMeta(record.loadType);

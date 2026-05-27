@@ -1,0 +1,253 @@
+.billing-workspace {
+  grid-template-columns: 270px minmax(0, 1fr) 390px;
+}
+
+.billing-stats strong {
+  font-size: 24px;
+  overflow-wrap: anywhere;
+}
+
+#billRows tr {
+  cursor: pointer;
+}
+
+#billRows tr.selected-row {
+  background: #eef5ff;
+}
+
+#billRows td strong,
+#billRows td small {
+  display: block;
+}
+
+#billRows td small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.billing-detail-panel {
+  max-height: calc(100vh - 94px);
+  overflow: auto;
+}
+
+.bill-form {
+  display: grid;
+  gap: 12px;
+}
+
+.bill-form.hidden {
+  display: none;
+}
+
+.form-grid,
+.fee-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.two-column,
+.fee-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.total-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(20, 104, 216, 0.22);
+  border-radius: 8px;
+  background: #e8f1ff;
+  color: var(--accent);
+  padding: 12px;
+}
+
+.total-preview span {
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.total-preview strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.form-warning,
+.form-message {
+  margin: -4px 0 0;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.form-warning {
+  color: var(--warning);
+}
+
+.form-message {
+  min-height: 16px;
+  color: var(--muted);
+}
+
+.form-message.error {
+  color: var(--issue);
+}
+
+.form-message.success {
+  color: var(--ok);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.status-draft {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.status-submitted,
+.status-under-review {
+  background: rgba(20, 104, 216, 0.1);
+  color: var(--accent);
+}
+
+.status-approved {
+  background: rgba(6, 118, 71, 0.1);
+  color: var(--ok);
+}
+
+.status-disputed {
+  background: #fff7ed;
+  color: var(--warning);
+}
+
+.status-paid {
+  background: #ecfdf3;
+  color: var(--ok);
+}
+
+.status-voided {
+  background: #f4f4f5;
+  color: var(--muted);
+}
+
+.overdue-text {
+  color: var(--issue);
+  font-weight: 850;
+}
+
+.fee-breakdown,
+.bill-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.fee-breakdown div,
+.bill-log-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 8px 10px;
+}
+
+.fee-breakdown span,
+.bill-log-entry span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.fee-breakdown strong,
+.bill-log-entry strong {
+  font-size: 12px;
+}
+
+.bill-log-entry {
+  grid-template-columns: 1fr;
+}
+
+.bill-log-entry p {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.detail-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.detail-section h3 {
+  font-size: 14px;
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button.compact {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.import-status.connected-text {
+  color: var(--ok);
+}
+
+.import-status.error-text {
+  color: var(--issue);
+  overflow-wrap: anywhere;
+}
+
+.billing-shell .empty-state:not(.hidden) {
+  display: block;
+}
+
+@media (max-width: 1180px) {
+  .billing-workspace {
+    grid-template-columns: 260px minmax(0, 1fr);
+  }
+
+  .billing-detail-panel {
+    grid-column: 1 / -1;
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .billing-workspace,
+  .two-column,
+  .fee-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+}

@@ -122,7 +122,14 @@
   }
 
   function renderRows(plans) {
-    els.resultCount.textContent = plans.length ? `${plans.length} visible of ${state.plans.length} plans` : "No matching plans";
+    els.resultCount.textContent = plans.length ? `${plans.length} visible of ${state.plans.length} plans` : resultEmptyLabel();
+    els.emptyState.innerHTML = state.plans.length ? `
+      <h3>No matching trip plans</h3>
+      <p>Adjust search or clear filters to see more results.</p>
+    ` : `
+      <h3>No trip plans loaded</h3>
+      <p>Create a trip plan to start tracking outbound dispatches.</p>
+    `;
     els.emptyState.classList.toggle("hidden", plans.length > 0);
     els.planRows.innerHTML = plans.map((plan) => {
       const stops = Array.isArray(plan.stops) ? plan.stops : [];
@@ -142,6 +149,7 @@
           <td>${stops.length}</td>
           <td>${renderDestinationLines(stops)}</td>
           <td>${escapeHtml(plan.transport || "-")}</td>
+          <td>${renderEquipmentLines(plan)}</td>
           <td>${renderCountdownLines(stops)}</td>
           <td>
             <div class="row-actions">
@@ -154,11 +162,25 @@
     }).join("");
   }
 
+  function resultEmptyLabel() {
+    return state.plans.length ? "No matching plans" : "No plans loaded";
+  }
+
   function renderDestinationLines(stops) {
     if (!stops.length) return "-";
     return `<div class="cell-lines">${stops.map((stop) => `
       <div class="cell-line">${escapeHtml(stop.destination || "-")}</div>
     `).join("")}</div>`;
+  }
+
+  function renderEquipmentLines(plan) {
+    if (!plan.truckNumber && !plan.trailerNumber) return "-";
+    return `
+      <div class="cell-lines">
+        <div class="cell-line">Truck: ${escapeHtml(plan.truckNumber || "-")}</div>
+        <div class="cell-line">Trailer: ${escapeHtml(plan.trailerNumber || "-")}</div>
+      </div>
+    `;
   }
 
   function renderCountdownLines(stops) {
@@ -199,6 +221,8 @@
         <div><dt>ETD</dt><dd>${escapeHtml(formatEta(plan))}</dd></div>
         <div><dt>Plan Date</dt><dd>${escapeHtml(plan.planDate || "-")}</dd></div>
         <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
+        <div><dt>Truck</dt><dd>${escapeHtml(plan.truckNumber || "-")}</dd></div>
+        <div><dt>Trailer</dt><dd>${escapeHtml(plan.trailerNumber || "-")}</dd></div>
         <div><dt>Countdown</dt><dd>${escapeHtml(formatCountdown(nextAppointmentCountdown(plan)))}</dd></div>
         <div><dt>Updated</dt><dd>${escapeHtml(formatDateTime(plan.updatedAt))}</dd></div>
       </dl>
@@ -288,6 +312,8 @@
       etaPeriod: clean(row.etd_period),
       etaAt: clean(row.etd_at),
       transport: clean(row.transport_mode),
+      truckNumber: clean(row.truck_number),
+      trailerNumber: clean(row.trailer_number),
       notes: clean(row.notes),
       stops: Array.isArray(row.stops) ? row.stops : [],
       changeLog: Array.isArray(row.change_log) ? row.change_log : [],
@@ -306,7 +332,7 @@
     const stopText = (Array.isArray(plan.stops) ? plan.stops : [])
       .map((stop) => [stop.isa, stop.destination, stop.schedule_time].join(" "))
       .join(" ");
-    return [plan.name, plan.type, plan.status, plan.planDate, plan.etaDate, plan.transport, stopText].join(" ").toLowerCase();
+    return [plan.name, plan.type, plan.status, plan.planDate, plan.etaDate, plan.transport, plan.truckNumber, plan.trailerNumber, stopText].join(" ").toLowerCase();
   }
 
   function minBuffer(plan) {

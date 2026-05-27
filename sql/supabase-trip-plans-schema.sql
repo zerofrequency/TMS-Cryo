@@ -8,6 +8,8 @@ create table if not exists public.trip_plans (
   etd_period text not null check (etd_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM')),
   etd_at timestamptz not null,
   transport_mode text,
+  truck_number text,
+  trailer_number text,
   notes text,
   stops jsonb not null default '[]'::jsonb,
   change_log jsonb not null default '[]'::jsonb,
@@ -55,6 +57,12 @@ alter table public.trip_plans
 add column if not exists change_log jsonb not null default '[]'::jsonb;
 
 alter table public.trip_plans
+add column if not exists truck_number text;
+
+alter table public.trip_plans
+add column if not exists trailer_number text;
+
+alter table public.trip_plans
 drop constraint if exists trip_plans_eta_period_check;
 
 alter table public.trip_plans
@@ -85,6 +93,8 @@ create index if not exists trip_plans_etd_at_idx on public.trip_plans (etd_at);
 drop index if exists public.trip_plans_eta_at_idx;
 create index if not exists trip_plans_plan_date_idx on public.trip_plans (plan_date);
 create index if not exists trip_plans_plan_status_idx on public.trip_plans (plan_status);
+create index if not exists trip_plans_truck_number_idx on public.trip_plans (truck_number);
+create index if not exists trip_plans_trailer_number_idx on public.trip_plans (trailer_number);
 
 alter table public.trip_plans enable row level security;
 

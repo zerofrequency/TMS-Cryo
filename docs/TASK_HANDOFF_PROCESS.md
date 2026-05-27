@@ -81,7 +81,7 @@ Each development task should include:
 
 ## Owner Role
 
-[Core Developer / UI Support Developer / Debug Specialist / Product Manager]
+[Core Developer / UI Support Developer / Debug Specialist / Version And File Manager / Product Manager]
 
 ## Background
 
@@ -179,6 +179,39 @@ Routing rule:
 - UI-only defects should go to UI Support Developer after diagnosis.
 - Schema, persistence, calculation, import/export, or state transition defects should go to Core Developer after diagnosis.
 - Unclear product behavior should go back to Product Manager for decision.
+
+### Version And File Manager Tasks
+
+Use Version And File Manager for tasks involving:
+
+- Git status review
+- Commit scope control
+- Push to GitHub
+- File organization
+- Documentation/task file placement
+- Staging only selected files
+- Checking that credentials or local-only files are not staged
+- Summarizing committed vs uncommitted work
+
+Version And File Manager tasks should include:
+
+```text
+Task:
+Scope:
+Exclude:
+Checks:
+Output:
+- Commit hash if committed
+- Push target if pushed
+- Files included
+- Files left uncommitted
+```
+
+Required rule:
+
+- Do not commit unrelated changes.
+- Do not commit credentials or local config.
+- Do not revert another role's work without explicit Product Manager approval.
 
 ## Task Status
 

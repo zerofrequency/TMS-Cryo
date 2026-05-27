@@ -23,6 +23,7 @@
         <a class="site-nav-link" href="../appts.html">Appt</a>
         <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./resources.html">Resources</a>
+        <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -40,30 +41,34 @@
 
       <section class="workspace trip-plan-workspace">
         <aside class="filters" aria-label="Trip plan filters">
-          <label>
+          <label class="filter-search">
             Search
-            <input id="searchInput" type="search" placeholder="Plan, ISA, destination..." />
+            <input id="searchInput" name="tripPlanSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Plan, ISA, destination, trailer, truck..." />
           </label>
-          <label>
-            Status
-            <select id="statusFilter">
-              <option value="">All statuses</option>
-            </select>
-          </label>
-          <label>
-            Plan Type
-            <select id="typeFilter">
-              <option value="">All types</option>
-            </select>
-          </label>
-          <label>
-            ETD From
-            <input id="fromDate" type="date" />
-          </label>
-          <label>
-            ETD To
-            <input id="toDate" type="date" />
-          </label>
+          <div class="filter-grid">
+            <label>
+              Status
+              <select id="statusFilter">
+                <option value="">All statuses</option>
+              </select>
+            </label>
+            <label>
+              Plan Type
+              <select id="typeFilter">
+                <option value="">All types</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-grid date-filter-grid">
+            <label>
+              ETD From
+              <input id="fromDate" type="date" />
+            </label>
+            <label>
+              ETD To
+              <input id="toDate" type="date" />
+            </label>
+          </div>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
         </aside>
 
@@ -86,6 +91,7 @@
                   <th>Stops</th>
                   <th>Destinations</th>
                   <th>Transport</th>
+                  <th>Truck / Trailer</th>
                   <th>Countdown</th>
                   <th>Actions</th>
                 </tr>

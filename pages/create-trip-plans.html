@@ -22,6 +22,7 @@
         <a class="site-nav-link" href="../appts.html">Appt</a>
         <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./resources.html">Resources</a>
+        <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -82,6 +83,14 @@
               Transport
               <input id="transportMode" type="text" placeholder="Truck, team, solo..." />
             </label>
+            <label>
+              Truck Number
+              <input id="truckNumber" type="text" placeholder="Truck / tractor number" />
+            </label>
+            <label>
+              Trailer Number
+              <input id="trailerNumber" type="text" placeholder="Trailer number" />
+            </label>
           </div>
 
           <section class="stops-section">
@@ -129,11 +138,12 @@
               <option value="private">Private Address</option>
             </select>
           </label>
-          <label class="appointment-field">
+          <label class="appointment-field stop-search-field">
             ISA
-            <input class="stop-isa" type="search" autocomplete="off" placeholder="Search ISA / FC" required />
+            <input class="stop-isa" name="stopIsaSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search ISA or FC" required />
             <datalist class="stop-isa-options"></datalist>
           </label>
+          <div class="appointment-context hidden" aria-live="polite"></div>
           <label class="private-field hidden">
             Manual ISA / Ref
             <input class="manual-isa" type="text" />

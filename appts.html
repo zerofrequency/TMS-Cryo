@@ -22,6 +22,7 @@
         <a class="site-nav-link active" href="./appts.html">Appt</a>
         <a class="site-nav-link" href="./pages/trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./pages/resources.html">Resources</a>
+        <a class="site-nav-link" href="./pages/carrier-billing.html">Carrier Billing</a>
         <span class="site-nav-link disabled">Inventory</span>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
@@ -45,36 +46,40 @@
 
       <section class="workspace">
         <aside class="filters" aria-label="Filters">
-          <label>
+          <label class="filter-search">
             Search
-            <input id="searchInput" type="search" placeholder="ISA, FC, status, reference..." />
+            <input id="searchInput" name="appointmentSearch" type="search" autocomplete="off" spellcheck="false" placeholder="ISA, FC, status, reference..." />
           </label>
-          <label>
-            FC
-            <select id="fcFilter">
-              <option value="">All FCs</option>
-            </select>
-          </label>
-          <label>
-            Status
-            <select id="statusFilter">
-              <option value="">All statuses</option>
-            </select>
-          </label>
-          <label>
-            Load Type
-            <select id="loadTypeFilter">
-              <option value="">All load types</option>
-            </select>
-          </label>
-          <label>
-            From
-            <input id="fromDate" type="date" />
-          </label>
-          <label>
-            To
-            <input id="toDate" type="date" />
-          </label>
+          <div class="filter-grid">
+            <label>
+              FC
+              <select id="fcFilter">
+                <option value="">All FCs</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select id="statusFilter">
+                <option value="">All statuses</option>
+              </select>
+            </label>
+            <label>
+              Load Type
+              <select id="loadTypeFilter">
+                <option value="">All load types</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-grid date-filter-grid">
+            <label>
+              From
+              <input id="fromDate" type="date" />
+            </label>
+            <label>
+              To
+              <input id="toDate" type="date" />
+            </label>
+          </div>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
         </aside>
 

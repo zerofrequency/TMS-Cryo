@@ -50,7 +50,7 @@ CSV/XLSX uploads are merged by ISA and saved to Supabase when `supabase-config.j
 
 Run `sql/supabase-schema.sql` in the Supabase SQL editor before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data and weekly FC appointment tables. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans. The current direct-browser setup uses the anon key and an open personal-use RLS policy. Tighten this later when adding Supabase Auth.
 
-Run `sql/supabase-resources-schema.sql` to add Fleet, Dock, and Loading Crew resource tables plus their assignment tables.
+Run `sql/supabase-resources-schema.sql` to add Carrier, Dock, and Loading Crew resource tables plus their assignment tables.
 
 Create and edit `supabase-config.js`:
 
@@ -79,13 +79,13 @@ For team development, each developer should create their own local `supabase-con
 
 ## Resources
 
-`pages/resources.html` is the Resource Dashboard. It shows Fleet, Dock, and Loading Crew availability, occupancy, and active trip-plan usage.
+`pages/resources.html` is the Resource Dashboard. It shows Carrier, Dock, and Loading Crew availability, occupancy, and active trip-plan usage.
 
-`pages/resource-maintain.html` maintains Fleet, Dock, and Loading Crew base records only. It does not assign resources to trips.
+`pages/resource-maintain.html` maintains Carrier, Dock, and Loading Crew base records only. It does not assign resources to trips.
 
 Resource assignment is handled in `pages/trip-plan-detail.html`:
 
-- Planned stage assigns Fleet
+- Planned stage assigns Carrier
 - Waiting stage assigns Dock
 - Loading stage assigns Loading Crew
 

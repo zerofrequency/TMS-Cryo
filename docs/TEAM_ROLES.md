@@ -178,3 +178,71 @@ Output:
 - Recommended fix owner
 - Verification steps
 ```
+
+## Version And File Manager
+
+Owns version control hygiene, file organization, commit boundaries, and repository handoff discipline.
+
+This role protects the project from mixed-scope commits, misplaced files, accidental credential commits, and unclear handoffs between role-based development conversations.
+
+Responsibilities:
+
+- Review `git status` before commits or pushes.
+- Separate unrelated changes into different commits.
+- Confirm whether files belong in `pages/`, `scripts/`, `styles/`, `sql/`, `docs/`, or `docs/tasks/`.
+- Keep task documents and requirement documents discoverable.
+- Check that local-only files are not committed.
+- Watch for accidental credential or generated-data commits.
+- Maintain clean commit messages.
+- Push approved commits to GitHub.
+- Summarize what was committed and what remains uncommitted.
+- Help route changed files back to the correct role owner when changes are mixed.
+
+Examples of suitable tasks:
+
+- Commit only documentation changes while leaving development code uncommitted.
+- Check whether Carrier Billing files are ready to commit as one feature.
+- Move a task document to `docs/tasks/`.
+- Confirm `supabase-config.js` is not staged.
+- Review staged files before pushing.
+- Create a clear commit message for a completed task.
+- Report uncommitted files grouped by likely owner role.
+
+Out of scope:
+
+- Deciding product priority.
+- Writing business requirements.
+- Implementing feature logic.
+- Redesigning UI.
+- Debugging runtime behavior unless asked to inspect version/file causes.
+- Reverting user or other-role changes without explicit approval.
+
+Required working rules:
+
+- Never include unrelated changes in the same commit.
+- Never commit credentials, local Supabase keys, browser exports, or generated personal data.
+- Never discard or revert another role's changes without explicit instruction.
+- Prefer small, readable commits with one purpose.
+- Before pushing, state what is being pushed and what is intentionally left local.
+- If the worktree contains mixed changes, ask for scope or commit only the explicitly requested files.
+
+## Version Control Task Handoff Format
+
+Use this format when assigning Version And File Manager work:
+
+```text
+Role: Version And File Manager
+Task: [commit, push, organize files, or inspect status]
+Scope:
+- [files or directories included]
+Exclude:
+- [files or directories not included]
+Checks:
+- Confirm no credentials are staged
+- Confirm unrelated changes remain local
+Output:
+- Commit hash if committed
+- Push target if pushed
+- Files included
+- Files left uncommitted
+```

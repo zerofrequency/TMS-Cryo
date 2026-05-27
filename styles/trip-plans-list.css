@@ -1,5 +1,5 @@
 .trip-plan-workspace {
-  grid-template-columns: 220px minmax(0, 1fr) 360px;
+  grid-template-columns: 260px minmax(0, 1fr) 360px;
 }
 
 .import-status.connected-text {

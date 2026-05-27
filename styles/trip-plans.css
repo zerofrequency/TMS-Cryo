@@ -142,6 +142,11 @@ h3 {
   gap: 8px;
 }
 
+.stop-search-field,
+.appointment-context {
+  grid-column: 1 / -1;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -232,6 +237,41 @@ textarea:focus {
   padding: 10px;
   box-shadow: none;
   transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.appointment-context {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 9px;
+}
+
+.appointment-context.hidden {
+  display: none;
+}
+
+.appointment-context span,
+.appointment-context strong {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.appointment-context span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.appointment-context strong {
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .stop-card.drop-target {
@@ -672,6 +712,10 @@ textarea:focus {
 
   .form-grid,
   .stop-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .appointment-context {
     grid-template-columns: 1fr;
   }
 

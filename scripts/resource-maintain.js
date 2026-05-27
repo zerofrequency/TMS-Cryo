@@ -3,13 +3,13 @@
 
   const RESOURCE_TYPES = {
     fleet: {
-      title: "Fleet",
+      title: "Carrier",
       baseTable: "fleet_resources",
       nameKey: "fleet_name",
       subtitle: "Register carriers, trucks, teams, and equipment notes.",
       fields: [
-        { key: "fleet_name", label: "Fleet Name", required: true, placeholder: "Example: ABC Trucking" },
-        { key: "fleet_type", label: "Fleet Type", type: "select", required: true, options: ["Third-Party Carrier", "Company Van Driver", "Company Truck Driver", "LTL Platform", "Other"] },
+        { key: "fleet_name", label: "Carrier Name", required: true, placeholder: "Example: ABC Trucking" },
+        { key: "fleet_type", label: "Carrier Type", type: "select", required: true, options: ["Third-Party Carrier", "Company Van Driver", "Company Truck Driver", "LTL Platform", "Other"] },
         { key: "capacity_mode", label: "Capacity Mode", type: "select", required: true, options: ["unlimited", "single"] },
         { key: "contact_name", label: "Contact" },
         { key: "phone", label: "Phone" },
@@ -88,7 +88,8 @@
   async function boot() {
     loadSupabaseConfig();
     bindEvents();
-    const requestedType = new URLSearchParams(window.location.search).get("type");
+    const requestedTypeParam = new URLSearchParams(window.location.search).get("type");
+    const requestedType = requestedTypeParam === "carrier" ? "fleet" : requestedTypeParam;
     if (RESOURCE_TYPES[requestedType]) state.activeType = requestedType;
     renderShell();
     if (!state.supabase.enabled) {
@@ -209,7 +210,7 @@
 
   function renderTableHead() {
     if (state.activeType === "fleet") {
-      els.resourceTableHead.innerHTML = "<th>Fleet</th><th>Contact</th><th>Equipment</th><th>Status</th><th>Notes</th><th>Actions</th>";
+      els.resourceTableHead.innerHTML = "<th>Carrier</th><th>Contact</th><th>Equipment</th><th>Status</th><th>Notes</th><th>Actions</th>";
       return;
     }
     if (state.activeType === "dock") {

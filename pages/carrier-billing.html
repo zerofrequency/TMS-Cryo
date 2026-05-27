@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Carrier Billing</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
+    <link rel="stylesheet" href="../styles/appointments.css" />
+    <link rel="stylesheet" href="../styles/carrier-billing.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./resources.html">Resources</a>
+        <a class="site-nav-link active" href="./carrier-billing.html">Carrier Billing</a>
+        <span class="site-nav-link disabled">Inventory</span>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
+
+    <main class="app-shell billing-shell">
+      <header class="topbar">
+        <div>
+          <h1>Carrier Billing</h1>
+          <p>Track carrier charges, statuses, disputes, and payment readiness by trip plan.</p>
+        </div>
+        <div class="actions">
+          <button id="newBillButton" class="button primary" type="button">New Bill</button>
+          <button id="exportButton" class="button" type="button">Export CSV</button>
+        </div>
+      </header>
+
+      <section class="stats billing-stats" aria-label="Carrier billing summary">
+        <article>
+          <span>Total Bills</span>
+          <strong id="totalBills">0</strong>
+        </article>
+        <article>
+          <span>Approved Amount</span>
+          <strong id="approvedAmount">$0.00</strong>
+        </article>
+        <article>
+          <span>Unpaid Amount</span>
+          <strong id="unpaidAmount">$0.00</strong>
+        </article>
+        <article>
+          <span>Disputed Amount</span>
+          <strong id="disputedAmount">$0.00</strong>
+        </article>
+      </section>
+
+      <section class="workspace billing-workspace">
+        <aside class="filters" aria-label="Carrier billing filters">
+          <label class="filter-search">
+            Search
+            <input id="searchInput" name="carrierBillingSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Carrier, invoice, plan, notes..." />
+          </label>
+          <div class="filter-grid">
+            <label>
+              Carrier
+              <select id="carrierFilter">
+                <option value="">All carriers</option>
+              </select>
+            </label>
+            <label>
+              Billing Status
+              <select id="statusFilter">
+                <option value="">All statuses</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-group">
+            <span class="filter-group-title">Invoice Date</span>
+            <div class="filter-grid date-filter-grid">
+              <label>
+                From
+                <input id="invoiceFrom" type="date" />
+              </label>
+              <label>
+                To
+                <input id="invoiceTo" type="date" />
+              </label>
+            </div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-group-title">Due Date</span>
+            <div class="filter-grid date-filter-grid">
+              <label>
+                From
+                <input id="dueFrom" type="date" />
+              </label>
+              <label>
+                To
+                <input id="dueTo" type="date" />
+              </label>
+            </div>
+          </div>
+          <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
+        </aside>
+
+        <section class="table-panel" aria-label="Carrier bill list">
+          <div class="table-header">
+            <div>
+              <h2>Billing Records</h2>
+              <p id="resultCount">No bills loaded</p>
+            </div>
+            <div id="cloudStatus" class="import-status">Checking Supabase</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Carrier</th>
+                  <th>Trip Plan</th>
+                  <th>Invoice #</th>
+                  <th>Status</th>
+                  <th>Invoice Date</th>
+                  <th>Due Date</th>
+                  <th>Total</th>
+                  <th>Currency</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="billRows"></tbody>
+            </table>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <h3>No carrier bills found</h3>
+            <p>Create a carrier bill or adjust filters to review billing records.</p>
+          </div>
+        </section>
+
+        <aside class="detail-panel billing-detail-panel" aria-label="Carrier bill detail">
+          <div id="detailEmpty" class="detail-empty">
+            <h2>Details</h2>
+            <p>Select a bill to review charges, status, notes, and change log.</p>
+          </div>
+
+          <section id="detailView" class="detail-form hidden"></section>
+
+          <form id="billForm" class="bill-form hidden">
+            <div class="detail-title">
+              <div>
+                <span id="formModeBadge" class="fc-badge">New</span>
+                <h2 id="formTitle">New Carrier Bill</h2>
+              </div>
+              <button id="cancelFormButton" class="icon-button" type="button" aria-label="Cancel form">×</button>
+            </div>
+
+            <label>
+              Trip Plan
+              <select id="tripPlanId">
+                <option value="">No linked trip plan</option>
+              </select>
+            </label>
+            <label>
+              Carrier Name
+              <input id="carrierName" type="text" placeholder="Carrier name" />
+            </label>
+            <label>
+              Invoice Number
+              <input id="invoiceNumber" type="text" placeholder="Invoice number" />
+            </label>
+            <p id="duplicateWarning" class="form-warning hidden">Another bill already uses this invoice number.</p>
+
+            <div class="form-grid two-column">
+              <label>
+                Invoice Date
+                <input id="invoiceDate" type="date" />
+              </label>
+              <label>
+                Due Date
+                <input id="dueDate" type="date" />
+              </label>
+              <label>
+                Paid Date
+                <input id="paidDate" type="date" />
+              </label>
+              <label>
+                Status
+                <select id="billingStatus"></select>
+              </label>
+            </div>
+
+            <div class="fee-grid">
+              <label>
+                Base Freight
+                <input id="baseFreight" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                Fuel Surcharge
+                <input id="fuelSurcharge" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                Accessorial Fee
+                <input id="accessorialFee" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                Detention Fee
+                <input id="detentionFee" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                Lumper Fee
+                <input id="lumperFee" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+              <label>
+                Other Fee
+                <input id="otherFee" class="fee-input" type="number" step="0.01" min="0" />
+              </label>
+            </div>
+
+            <div class="total-preview">
+              <span>Total Amount</span>
+              <strong id="totalPreview">$0.00</strong>
+            </div>
+
+            <label>
+              Currency
+              <input id="currency" type="text" maxlength="3" placeholder="USD" />
+            </label>
+            <label>
+              Notes
+              <textarea id="notes" rows="4" placeholder="Billing notes, dispute reason, payment context..."></textarea>
+            </label>
+            <p id="formMessage" class="form-message"></p>
+
+            <div class="form-actions">
+              <button class="button primary" type="submit">Save Bill</button>
+              <button id="resetFormButton" class="button" type="button">Reset</button>
+            </div>
+          </form>
+        </aside>
+      </section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
+    <script src="../scripts/carrier-billing.js"></script>
+  </body>
+</html>

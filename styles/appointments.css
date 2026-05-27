@@ -216,7 +216,7 @@ h3 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 320px;
+  grid-template-columns: 260px minmax(0, 1fr) 320px;
   gap: 14px;
   align-items: start;
 }
@@ -232,10 +232,37 @@ h3 {
 
 .filters {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   padding: 14px;
   position: sticky;
   top: 69px;
+  align-content: start;
+}
+
+.filter-search {
+  min-width: 0;
+}
+
+.filter-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.date-filter-grid {
+  gap: 10px;
+}
+
+.filter-group {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filter-group-title {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
 }
 
 label {
@@ -258,6 +285,10 @@ textarea {
   padding: 8px 10px;
   font-size: 13px;
   outline: none;
+}
+
+input[type="search"] {
+  appearance: none;
 }
 
 textarea {
@@ -841,6 +872,10 @@ tbody tr.selected {
   text-align: center;
 }
 
+.empty-state:not(.hidden) {
+  display: block;
+}
+
 .detail-panel {
   min-height: 420px;
   padding: 16px;
@@ -998,7 +1033,7 @@ tbody tr.selected {
 
 @media (max-width: 1120px) {
   .workspace {
-    grid-template-columns: 200px minmax(0, 1fr);
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 
   .detail-panel {
@@ -1037,6 +1072,10 @@ tbody tr.selected {
   .filters,
   .detail-panel {
     position: static;
+  }
+
+  .filters {
+    gap: 12px;
   }
 
   .table-wrap {
