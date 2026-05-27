@@ -2,6 +2,20 @@
 
 Lightweight personal dashboard for managing Amazon Carrier Central appointments.
 
+## Team development
+
+Use one regular clone of this repository for day-to-day development. Keep `main` stable and create a short-lived branch for each change:
+
+```sh
+git checkout main
+git pull
+git checkout -b feat/your-change-name
+```
+
+Open a pull request before merging back to `main`. Do not commit local credentials, exported appointment files, or browser-generated files. See `CONTRIBUTING.md` for the team workflow.
+
+If you use Git worktrees locally, treat them as an advanced personal setup only. The canonical project is the repository root after a normal clone, not a parent folder containing multiple worktrees.
+
 ## Open
 
 Open `index.html` in a browser to use the module homepage. Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Create Trip Plan** from that page to add a new plan.
@@ -49,6 +63,8 @@ window.CARRIER_APPT_SUPABASE = {
 
 Do not use the `service_role` key in this file.
 
+For team development, each developer should create their own local `supabase-config.js`. This file is ignored by Git and must not be shared in commits.
+
 ## Hot FC weekly page
 
 `pages/fc-dashboard.html` shows FCs with a non-empty weekly appointment status. Select a week, choose an FC, enter the appointment status, and save. Clearing the status removes that FC from the selected week view. The list and Three.js map both hide empty weekly rows.
@@ -83,11 +99,13 @@ Dock occupancy is derived from active dock assignments. Creating an active dock 
 
 ## Folder structure
 
+- `index.html`: module homepage
+- `appts.html`: appointment manager
 - `pages/`: secondary HTML pages
 - `scripts/`: browser JavaScript
 - `styles/`: page CSS
 - `sql/`: Supabase schema files
-- `data/`: local generated data assets
+- `data/`: tracked reference data and ignored local generated data
 
 ## Incremental updates
 
