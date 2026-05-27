@@ -107,6 +107,8 @@ Dock occupancy is derived from active dock assignments. Creating an active dock 
 - `sql/`: Supabase schema files
 - `data/`: tracked reference data and ignored local generated data
 
+See `docs/PROJECT_STRUCTURE.md` for where team members should add new files.
+
 ## Incremental updates
 
 `ISA` is the unique value. When a new upload contains an existing ISA, the app updates the appointment details from the new file instead of creating a duplicate. Manual `Load Type` and `Notes` are preserved unless the existing value is blank.
