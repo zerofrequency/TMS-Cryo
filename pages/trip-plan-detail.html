@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Trip Plan Detail</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
     <link rel="stylesheet" href="../styles/site-nav.css" />
     <link rel="stylesheet" href="../styles/appointments.css" />
     <link rel="stylesheet" href="../styles/trip-plan-detail.css" />
@@ -57,10 +58,15 @@
             <span id="statusBadge" class="plan-status">Planned</span>
             <h2 id="overviewName">Trip Plan</h2>
           </div>
-          <dl id="overviewMeta" class="overview-meta"></dl>
+          <div id="detailTabs" class="detail-tabs" role="tablist" aria-label="Trip plan detail sections">
+            <button class="detail-tab active" type="button" data-detail-tab="overview" role="tab">Overview</button>
+            <button class="detail-tab" type="button" data-detail-tab="details" role="tab">Details</button>
+            <button class="detail-tab" type="button" data-detail-tab="documents" role="tab">Documents</button>
+          </div>
+          <div id="detailTabBody" class="detail-tab-body"></div>
         </aside>
 
-        <section class="stage-detail-panel" aria-label="Selected stage detail">
+        <section class="stage-detail-panel" aria-label="Trip plan workspace">
           <div class="stage-detail-head">
             <div>
               <span id="stageEyebrow">Current Stage</span>
@@ -73,7 +79,9 @@
       </section>
     </main>
 
+    <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
     <script src="../supabase-config.js"></script>
+    <script src="../map-config.js"></script>
     <script src="../scripts/clocks.js"></script>
     <script src="../scripts/trip-plan-detail.js"></script>
   </body>

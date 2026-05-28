@@ -28,6 +28,13 @@ Responsibilities:
 - Fix blocking workflow bugs.
 - Prepare future enterprise architecture migration.
 
+Current assignment:
+
+- Previous Core Developer session: `019e6974-965e-7d03-aee8-aced2d42d786`
+- Status: unable to continue due to remote compact stream disconnection.
+- Current Core Developer-2 session: `019e6f09-1665-7860-9b1e-c8079d193864`
+- Core Developer-2 should take over open Core Developer tasks.
+
 ## UI Support Developer
 
 Owns small UI adjustments and non-core interface repairs.
@@ -225,6 +232,8 @@ Required working rules:
 - Prefer small, readable commits with one purpose.
 - Before pushing, state what is being pushed and what is intentionally left local.
 - If the worktree contains mixed changes, ask for scope or commit only the explicitly requested files.
+- When GitHub access fails because of network connectivity, first try the local proxy at `127.0.0.1:7897`.
+- Do not commit local proxy settings into project files.
 
 ## Version Control Task Handoff Format
 

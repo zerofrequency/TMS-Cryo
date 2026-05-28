@@ -3,6 +3,7 @@
 
   const BILL_TABLE = "carrier_bills";
   const TRIP_TABLE = "trip_plans";
+  const DOCUMENT_TABLE = "business_documents";
   const CARRIER_RESOURCE_TABLE = "fleet_resources";
   const CARRIER_ASSIGNMENT_TABLE = "fleet_assignments";
   const BILLING_STATUSES = ["Draft", "Submitted", "Under Review", "Approved", "Disputed", "Paid", "Voided"];
@@ -59,8 +60,10 @@
     supabase: { url: "", key: "", enabled: false },
     bills: [],
     plans: [],
+    documents: [],
     selectedId: "",
     editingId: "",
+    detailTab: "overview",
   };
 
   boot();
@@ -99,6 +102,21 @@
       state.editingId = "";
       render();
     });
+    els.detailView.addEventListener("click", (event) => {
+      const tabButton = event.target.closest("[data-billing-tab]");
+      const editButton = event.target.closest("[data-edit-bill]");
+      const generateButton = event.target.closest("[data-generate-invoice]");
+      const openButton = event.target.closest("[data-open-invoice]");
+      const downloadButton = event.target.closest("[data-download-invoice]");
+      if (tabButton) {
+        state.detailTab = tabButton.dataset.billingTab;
+        render();
+      }
+      if (editButton) showForm(editButton.dataset.editBill);
+      if (generateButton) generateInvoice(generateButton.dataset.generateInvoice, "open");
+      if (openButton) openInvoice(openButton.dataset.openInvoice);
+      if (downloadButton) downloadInvoice(downloadButton.dataset.downloadInvoice);
+    });
     els.cancelFormButton.addEventListener("click", hideForm);
     els.resetFormButton.addEventListener("click", () => showForm(state.editingId));
     els.billForm.addEventListener("submit", saveBill);
@@ -133,6 +151,7 @@
       const carrierByPlan = buildCarrierByPlan(carrierResources, carrierAssignments);
       state.plans = plans.map((plan) => normalizePlan(plan, carrierByPlan));
       state.bills = bills.map(normalizeBill);
+      await loadDocuments();
       if (!state.selectedId && state.bills.length) state.selectedId = state.bills[0].id;
       fillTripPlanOptions();
       fillCarrierFilter();
@@ -141,6 +160,14 @@
     } catch (error) {
       setCloudStatus(error.message, "error");
       render();
+    }
+  }
+
+  async function loadDocuments() {
+    try {
+      state.documents = await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.carrier_bill&document_status=eq.active&select=*&order=updated_at.desc`);
+    } catch (error) {
+      state.documents = [];
     }
   }
 
@@ -221,34 +248,129 @@
       <div class="detail-title">
         <div>
           ${statusChip(bill.status)}
-          <h2>${escapeHtml(bill.carrierName || "Carrier Bill")}</h2>
+          <h2>${escapeHtml(bill.invoiceNumber || bill.carrierName || "Carrier Bill")}</h2>
+          <p class="detail-subtitle">${escapeHtml(compactUnique([bill.carrierName, plan ? plan.name : "Unlinked"]).join(" / "))}</p>
         </div>
         <button class="button compact" type="button" data-edit-bill="${escapeAttr(bill.id)}">Edit</button>
       </div>
-      <dl class="meta">
-        <div><dt>Trip Plan</dt><dd>${escapeHtml(plan ? `${plan.name} / ${plan.status}` : "Unlinked")}</dd></div>
-        <div><dt>Carrier</dt><dd>${escapeHtml(plan && plan.carrier ? plan.carrier : bill.carrierName || "-")}</dd></div>
-        <div><dt>Invoice</dt><dd>${escapeHtml(bill.invoiceNumber || "-")}</dd></div>
-        <div><dt>Invoice Date</dt><dd>${escapeHtml(bill.invoiceDate || "-")}</dd></div>
-        <div><dt>Due Date</dt><dd class="${isOverdue(bill) ? "overdue-text" : ""}">${escapeHtml(bill.dueDate || "-")}</dd></div>
-        <div><dt>Paid Date</dt><dd>${escapeHtml(bill.paidDate || "-")}</dd></div>
-        <div><dt>Total</dt><dd>${escapeHtml(`${money(bill.totalAmount)} ${bill.currency}`)}</dd></div>
-        <div><dt>Updated</dt><dd>${escapeHtml(formatDateTime(bill.updatedAt))}</dd></div>
-      </dl>
+      ${renderBillingTabs()}
+      ${renderBillingTabBody(bill, plan)}
+    `;
+  }
+
+  function renderBillingTabs() {
+    return `
+      <div class="detail-tabs" role="tablist" aria-label="Carrier billing detail sections">
+        ${["overview", "details", "documents"].map((tab) => `
+          <button class="detail-tab ${state.detailTab === tab ? "active" : ""}" type="button" data-billing-tab="${tab}" role="tab" aria-selected="${state.detailTab === tab ? "true" : "false"}">
+            ${escapeHtml(tab[0].toUpperCase() + tab.slice(1))}
+          </button>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderBillingTabBody(bill, plan) {
+    if (state.detailTab === "documents") return renderBillingDocumentsTab(bill);
+    if (state.detailTab === "details") return renderBillingDetailsTab(bill);
+    return renderBillingOverviewTab(bill, plan);
+  }
+
+  function renderBillingOverviewTab(bill, plan) {
+    return `
+      <section class="detail-section">
+        <h3>Billing Overview</h3>
+        <div class="billing-overview-grid">
+          <article><span>Status</span><strong>${statusChip(bill.status)}</strong></article>
+          <article><span>Total</span><strong>${escapeHtml(`${money(bill.totalAmount)} ${bill.currency}`)}</strong></article>
+          <article><span>Carrier</span><strong>${escapeHtml(plan && plan.carrier ? plan.carrier : bill.carrierName || "-")}</strong></article>
+          <article><span>Linked Trip</span><strong>${escapeHtml(plan ? `${plan.name} / ${plan.status}` : "Unlinked")}</strong></article>
+          <article><span>Due Date</span><strong class="${isOverdue(bill) ? "overdue-text" : ""}">${escapeHtml(bill.dueDate || "-")}</strong></article>
+          <article><span>Paid Date</span><strong>${escapeHtml(bill.paidDate || "-")}</strong></article>
+        </div>
+      </section>
+      <section class="detail-section">
+        <h3>Readiness</h3>
+        <div class="readiness-list">
+          ${billingReadinessItems(bill).map((item) => `
+            <article class="readiness-item ${item.ok ? "ready" : "warning"}">
+              <span>${item.ok ? "Ready" : "Needs attention"}</span>
+              <strong>${escapeHtml(item.label)}</strong>
+              <p>${escapeHtml(item.detail)}</p>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderBillingDetailsTab(bill) {
+    return `
+      <section class="detail-section">
+        <h3>Invoice Details</h3>
+        <dl class="meta">
+          <div><dt>Invoice</dt><dd>${escapeHtml(bill.invoiceNumber || "-")}</dd></div>
+          <div><dt>Carrier</dt><dd>${escapeHtml(bill.carrierName || "-")}</dd></div>
+          <div><dt>Invoice Date</dt><dd>${escapeHtml(bill.invoiceDate || "-")}</dd></div>
+          <div><dt>Due Date</dt><dd class="${isOverdue(bill) ? "overdue-text" : ""}">${escapeHtml(bill.dueDate || "-")}</dd></div>
+          <div><dt>Paid Date</dt><dd>${escapeHtml(bill.paidDate || "-")}</dd></div>
+          <div><dt>Status</dt><dd>${escapeHtml(bill.status)}</dd></div>
+          <div><dt>Updated</dt><dd>${escapeHtml(formatDateTime(bill.updatedAt))}</dd></div>
+        </dl>
+      </section>
       <section class="detail-section">
         <h3>Fee Breakdown</h3>
         <div class="fee-breakdown">${FEE_FIELDS.map(([, column, label]) => `
           <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(money(bill[column]))}</strong></div>
-        `).join("")}</div>
+        `).join("")}
+          <div><span>Total</span><strong>${escapeHtml(money(bill.totalAmount))}</strong></div>
+        </div>
       </section>
-      ${bill.notes ? `<section class="detail-section"><h3>Notes</h3><p>${escapeHtml(bill.notes)}</p></section>` : ""}
+      <section class="detail-section"><h3>Notes</h3><p>${escapeHtml(bill.notes || "-")}</p></section>
       <section class="detail-section">
         <h3>Change Log</h3>
         ${renderChangeLog(bill.changeLog)}
       </section>
     `;
-    const editButton = els.detailView.querySelector("[data-edit-bill]");
-    editButton.addEventListener("click", () => showForm(bill.id));
+  }
+
+  function renderBillingDocumentsTab(bill) {
+    return `
+      ${renderInvoiceDocuments(bill)}
+    `;
+  }
+
+  function billingReadinessItems(bill) {
+    return [
+      { label: "Invoice number", ok: Boolean(bill.invoiceNumber), detail: bill.invoiceNumber || "Missing invoice number." },
+      { label: "Due date", ok: Boolean(bill.dueDate), detail: bill.dueDate || "Missing due date." },
+      { label: "Paid date", ok: bill.status !== "Paid" || Boolean(bill.paidDate), detail: bill.paidDate || "Paid bills require a paid date." },
+      { label: "Dispute notes", ok: bill.status !== "Disputed" || Boolean(bill.notes), detail: bill.notes || "Disputed bills should include notes." },
+    ];
+  }
+
+  function renderInvoiceDocuments(bill) {
+    const doc = latestDocument(bill.id, "invoice");
+    return `
+      <section class="detail-section document-section">
+        <header>
+          <h3>Documents</h3>
+          <span>${doc ? `Invoice generated ${escapeHtml(formatDateTime(doc.updated_at || doc.created_at))}` : "Invoice not generated"}</span>
+        </header>
+        <div class="document-card">
+          <div>
+            <strong>Carrier Invoice</strong>
+            <span class="${doc ? "ready-chip" : "todo-chip"}">${doc ? "Generated" : "Not generated"}</span>
+            <span>${escapeHtml(doc ? doc.file_name || "Generated invoice" : "Generate from current billing details")}</span>
+          </div>
+          <div class="document-actions">
+            <button class="button compact" type="button" data-generate-invoice="${escapeAttr(bill.id)}">${doc ? "Regenerate" : "Generate"}</button>
+            <button class="button compact" type="button" data-open-invoice="${escapeAttr(bill.id)}">View</button>
+            <button class="button compact" type="button" data-download-invoice="${escapeAttr(bill.id)}">Download</button>
+          </div>
+        </div>
+      </section>
+    `;
   }
 
   function renderChangeLog(changeLog) {
@@ -459,6 +581,114 @@
     URL.revokeObjectURL(url);
   }
 
+  async function generateInvoice(billId, mode = "open") {
+    const bill = state.bills.find((item) => item.id === billId);
+    if (!bill) return;
+    const plan = tripPlanFor(bill.tripPlanId);
+    const payload = invoicePayload(bill, plan);
+    const fileName = `invoice-${safeFilePart(bill.invoiceNumber || bill.id)}.html`;
+    try {
+      if (state.supabase.enabled) {
+        await saveDocumentMetadata({
+          entity_type: "carrier_bill",
+          entity_id: bill.id,
+          document_type: "invoice",
+          document_status: "active",
+          file_name: fileName,
+          mime_type: "text/html",
+          source: "generated",
+          generated_payload: payload,
+          updated_at: new Date().toISOString(),
+        });
+        await loadDocuments();
+        render();
+      }
+    } catch (error) {
+      setCloudStatus(`Invoice generated locally; metadata save failed: ${error.message}`, "error");
+    }
+    if (mode === "download") downloadHtml(fileName, invoiceHtml(payload));
+    else openGeneratedDocument(invoiceHtml(payload));
+  }
+
+  function openInvoice(billId) {
+    generateInvoice(billId, "open");
+  }
+
+  function downloadInvoice(billId) {
+    generateInvoice(billId, "download");
+  }
+
+  async function saveDocumentMetadata(payload) {
+    await replaceExistingDocuments(payload.entity_type, payload.entity_id, payload.document_type);
+    await supabaseRequest(DOCUMENT_TABLE, {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async function replaceExistingDocuments(entityType, entityId, documentType) {
+    await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.${encodeURIComponent(entityType)}&entity_id=eq.${encodeURIComponent(entityId)}&document_type=eq.${encodeURIComponent(documentType)}&document_status=eq.active`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        document_status: "replaced",
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  }
+
+  function latestDocument(entityId, documentType) {
+    return state.documents.find((doc) => (
+      clean(doc.entity_id) === clean(entityId) && clean(doc.document_type) === documentType
+    ));
+  }
+
+  function invoicePayload(bill, plan) {
+    return {
+      invoiceNumber: bill.invoiceNumber,
+      carrierName: bill.carrierName,
+      tripPlanName: plan ? plan.name : "",
+      tripPlanId: bill.tripPlanId,
+      tripPlanStatus: plan ? plan.status : "",
+      invoiceDate: bill.invoiceDate,
+      dueDate: bill.dueDate,
+      paidDate: bill.paidDate,
+      billingStatus: bill.status,
+      currency: bill.currency,
+      notes: bill.notes,
+      fees: FEE_FIELDS.map(([, column, label]) => ({ label, amount: bill[column] })),
+      totalAmount: bill.totalAmount,
+      generatedAt: new Date().toISOString(),
+    };
+  }
+
+  function invoiceHtml(payload) {
+    return documentHtml("Carrier Billing Invoice", `
+      <section class="doc-header">
+        <div>
+          <h1>Invoice</h1>
+          <p>${escapeHtml(payload.invoiceNumber || "No invoice number")}</p>
+        </div>
+        <strong>${escapeHtml(payload.billingStatus || "-")}</strong>
+      </section>
+      ${documentMetaGrid([
+        ["Carrier", payload.carrierName || "-"],
+        ["Trip Plan", compactUnique([payload.tripPlanName, payload.tripPlanId]).join(" / ") || "-"],
+        ["Trip Status", payload.tripPlanStatus || "-"],
+        ["Invoice Date", payload.invoiceDate || "-"],
+        ["Due Date", payload.dueDate || "-"],
+        ["Paid Date", payload.paidDate || "-"],
+        ["Currency", payload.currency || "USD"],
+      ])}
+      <h2>Fee Breakdown</h2>
+      ${documentTable(["Fee", "Amount"], payload.fees.map((fee) => [fee.label, money(fee.amount)]))}
+      <section class="doc-total"><span>Total</span><strong>${escapeHtml(money(payload.totalAmount))} ${escapeHtml(payload.currency || "USD")}</strong></section>
+      <h2>Notes</h2>
+      <p>${escapeHtml(payload.notes || "-")}</p>
+    `);
+  }
+
   function clearFilters() {
     [els.searchInput, els.carrierFilter, els.statusFilter, els.invoiceFrom, els.invoiceTo, els.dueFrom, els.dueTo].forEach((element) => {
       element.value = "";
@@ -655,6 +885,71 @@
 
   function money(value) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amountValue(value));
+  }
+
+  function documentHtml(title, body) {
+    return `<!doctype html>
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>${escapeHtml(title)}</title>
+          <style>
+            body { margin: 0; padding: 32px; color: #18202a; font-family: Arial, sans-serif; }
+            h1, h2, p { margin: 0; }
+            h1 { font-size: 28px; }
+            h2 { margin-top: 24px; margin-bottom: 10px; font-size: 16px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #d9dee7; padding: 8px 10px; text-align: left; font-size: 12px; }
+            th { background: #f6f7f9; color: #697382; text-transform: uppercase; }
+            .doc-header { display: flex; justify-content: space-between; gap: 20px; border-bottom: 2px solid #18202a; padding-bottom: 16px; margin-bottom: 18px; }
+            .doc-header p { margin-top: 6px; color: #697382; }
+            .doc-header strong { align-self: flex-start; border: 1px solid #d9dee7; border-radius: 6px; padding: 6px 10px; }
+            .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+            .meta-grid div { border: 1px solid #d9dee7; padding: 8px 10px; }
+            .meta-grid span { display: block; color: #697382; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+            .meta-grid strong { display: block; margin-top: 4px; font-size: 13px; overflow-wrap: anywhere; }
+            .doc-total { display: flex; justify-content: flex-end; gap: 16px; margin-top: 14px; font-size: 18px; }
+            @media print { body { padding: 18px; } button { display: none; } }
+          </style>
+        </head>
+        <body>${body}</body>
+      </html>`;
+  }
+
+  function documentMetaGrid(rows) {
+    return `<section class="meta-grid">${rows.map(([label, value]) => `
+      <div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>
+    `).join("")}</section>`;
+  }
+
+  function documentTable(headers, rows) {
+    return `<table>
+      <thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead>
+      <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table>`;
+  }
+
+  function openGeneratedDocument(html) {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+
+  function downloadHtml(fileName, html) {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function safeFilePart(value) {
+    return clean(value).replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "document";
   }
 
   function optionHtml(value) {

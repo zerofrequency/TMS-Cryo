@@ -212,6 +212,8 @@ Required rule:
 - Do not commit unrelated changes.
 - Do not commit credentials or local config.
 - Do not revert another role's work without explicit Product Manager approval.
+- If GitHub access fails, first try the local proxy at `127.0.0.1:7897`.
+- Keep proxy settings local and do not commit them to the repository.
 
 ## Task Status
 

@@ -532,8 +532,7 @@ textarea:focus {
 
 .timeline-view {
   max-height: calc(100vh - 225px);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: auto;
   padding: 14px 16px 16px;
 }
 
@@ -543,7 +542,8 @@ textarea:focus {
   grid-auto-columns: minmax(220px, 260px);
   gap: 10px;
   align-items: start;
-  /* min-width: max-content; */
+  width: max-content;
+  min-width: 100%;
   padding-bottom: 10px;
 }
 
@@ -551,6 +551,7 @@ textarea:focus {
   display: grid;
   gap: 8px;
   min-width: 0;
+  align-content: start;
 }
 
 .timeline-day-head {
@@ -601,6 +602,7 @@ textarea:focus {
 .timeline-items {
   display: grid;
   gap: 5px;
+  align-content: start;
 }
 
 .timeline-item {

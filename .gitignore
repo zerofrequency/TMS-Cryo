@@ -5,6 +5,7 @@
 .env
 .env.*
 supabase-config.js
+map-config.js
 
 # Personal imported/exported data
 data/carrier-appointments.json

@@ -291,10 +291,11 @@
       return;
     }
     const etaAt = etaDateTime().toISOString();
+    const existingPlan = currentEditingPlan();
     const payload = {
       plan_name: clean(els.planName.value) || generateDefaultPlanName(stops),
       plan_type: els.planType.value,
-      plan_status: currentEditingPlan()?.plan_status || "Planned",
+      plan_status: existingPlan?.plan_status || "Planned",
       plan_date: els.planDate.value || null,
       etd_date: els.etaDate.value,
       etd_period: els.etaPeriod.value,
@@ -306,6 +307,7 @@
       stops,
       updated_at: new Date().toISOString(),
     };
+    payload.change_log = nextTripPlanChangeLog(existingPlan, payload);
 
     try {
       if (state.editingPlanId) {
@@ -332,6 +334,46 @@
       console.error(error);
       setCloudStatus(error.message, "error");
     }
+  }
+
+  function nextTripPlanChangeLog(existingPlan, payload) {
+    const entries = existingPlan && Array.isArray(existingPlan.change_log) ? [...existingPlan.change_log] : [];
+    const changes = [];
+    if (!existingPlan) {
+      entries.push({
+        at: new Date().toISOString(),
+        action: "Trip plan created",
+        message: `Trip plan created with truck ${payload.truck_number || "-"} and trailer ${payload.trailer_number || "-"}.`,
+      });
+      return entries;
+    }
+    if (clean(existingPlan.truck_number) !== clean(payload.truck_number)) {
+      changes.push({
+        label: "Truck number",
+        field: "truck_number",
+        from: clean(existingPlan.truck_number) || "-",
+        to: clean(payload.truck_number) || "-",
+      });
+    }
+    if (clean(existingPlan.trailer_number) !== clean(payload.trailer_number)) {
+      changes.push({
+        label: "Trailer number",
+        field: "trailer_number",
+        from: clean(existingPlan.trailer_number) || "-",
+        to: clean(payload.trailer_number) || "-",
+      });
+    }
+    changes.forEach((change) => {
+      entries.push({
+        at: new Date().toISOString(),
+        action: `${change.label} updated`,
+        field: change.field,
+        from: change.from,
+        to: change.to,
+        message: `${change.label} changed from ${change.from} to ${change.to}.`,
+      });
+    });
+    return entries;
   }
 
   async function syncIsaBindings(planId, stops, planStatus) {

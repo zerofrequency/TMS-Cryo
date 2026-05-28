@@ -32,6 +32,39 @@
   overflow: auto;
 }
 
+.detail-subtitle {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.detail-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-tab {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.detail-tab.active {
+  border-color: rgba(20, 104, 216, 0.45);
+  background: #e8f1ff;
+  color: var(--accent);
+}
+
 .bill-form {
   display: grid;
   gap: 12px;
@@ -202,6 +235,127 @@
   font-size: 14px;
 }
 
+.detail-section header,
+.document-card,
+.document-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-section header,
+.document-card {
+  justify-content: space-between;
+}
+
+.detail-section header span,
+.document-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.document-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+.document-card strong,
+.document-card span {
+  display: block;
+}
+
+.document-card span {
+  margin-top: 3px;
+}
+
+.document-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.billing-overview-grid,
+.readiness-list {
+  display: grid;
+  gap: 8px;
+}
+
+.billing-overview-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.billing-overview-grid article,
+.readiness-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+.billing-overview-grid span,
+.billing-overview-grid strong,
+.readiness-item span,
+.readiness-item strong,
+.readiness-item p,
+.ready-chip,
+.todo-chip {
+  display: block;
+}
+
+.billing-overview-grid span,
+.readiness-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.billing-overview-grid strong,
+.readiness-item strong {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.readiness-item.ready {
+  border-color: rgba(6, 118, 71, 0.22);
+}
+
+.readiness-item.warning {
+  border-color: rgba(181, 71, 8, 0.24);
+  background: #fffaf4;
+}
+
+.readiness-item p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ready-chip,
+.todo-chip {
+  width: fit-content;
+  margin: 5px 0 0;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.ready-chip {
+  background: rgba(6, 118, 71, 0.1);
+  color: var(--ok);
+}
+
+.todo-chip {
+  background: #fff7ed;
+  color: var(--warning);
+}
+
 .row-actions {
   display: inline-flex;
   align-items: center;
@@ -243,7 +397,8 @@
 @media (max-width: 760px) {
   .billing-workspace,
   .two-column,
-  .fee-grid {
+  .fee-grid,
+  .billing-overview-grid {
     grid-template-columns: 1fr;
   }
 

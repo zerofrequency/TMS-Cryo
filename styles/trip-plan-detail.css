@@ -120,6 +120,47 @@
   overflow-wrap: anywhere;
 }
 
+.detail-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-tab {
+  min-height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.detail-tab.active {
+  border-color: rgba(20, 104, 216, 0.45);
+  background: #e8f1ff;
+  color: var(--accent);
+}
+
+.detail-tab-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.tab-section {
+  display: grid;
+  gap: 9px;
+}
+
+.tab-section h3 {
+  font-size: 14px;
+}
+
 .overview-meta,
 .stage-metrics,
 .stage-record-list,
@@ -130,8 +171,129 @@
   margin: 0;
 }
 
+.document-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.document-grid.single-column {
+  grid-template-columns: 1fr;
+}
+
+.document-card {
+  display: grid;
+  gap: 10px;
+  align-content: space-between;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+.document-card strong,
+.document-card span {
+  display: block;
+}
+
+.document-card span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.document-actions .button {
+  width: auto;
+}
+
+.document-actions .button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.document-actions input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.route-map-section {
+  gap: 12px;
+}
+
+.route-map-shell {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #eef2f7;
+}
+
+.route-map {
+  position: absolute;
+  inset: 0;
+}
+
+.route-map-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  background: rgba(251, 252, 253, 0.92);
+  padding: 20px;
+  text-align: center;
+}
+
+.route-map-empty.hidden {
+  display: none;
+}
+
+.route-map-empty strong {
+  font-size: 15px;
+}
+
+.route-map-empty span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.route-map-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.route-map-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .overview-meta {
   padding-top: 14px;
+}
+
+.detail-tab-body .overview-meta {
+  padding-top: 0;
 }
 
 .overview-meta div,
@@ -243,6 +405,72 @@ dd .overview-stop-list {
 .stage-detail-panel {
   min-width: 0;
   overflow: hidden;
+}
+
+.readiness-list,
+.resource-summary-grid,
+.detail-stop-list {
+  display: grid;
+  gap: 8px;
+}
+
+.readiness-item,
+.resource-summary-card,
+.detail-stop-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 10px;
+}
+
+.readiness-item.ready {
+  border-color: rgba(6, 118, 71, 0.22);
+}
+
+.readiness-item.warning {
+  border-color: rgba(181, 71, 8, 0.24);
+  background: #fffaf4;
+}
+
+.readiness-item span,
+.readiness-item strong,
+.readiness-item p,
+.resource-summary-card span,
+.resource-summary-card strong,
+.resource-summary-card p,
+.detail-stop-card strong {
+  display: block;
+}
+
+.readiness-item strong,
+.resource-summary-card strong,
+.detail-stop-card > strong {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.readiness-item p,
+.resource-summary-card p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.detail-stop-card dl {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 0;
+}
+
+.detail-stop-card dl div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.resource-summary-grid {
+  grid-template-columns: 1fr;
 }
 
 .stage-detail-head {
@@ -597,6 +825,7 @@ dd .overview-stop-list {
   }
 
   .requirement-grid,
+  .document-grid,
   .review-list,
   .assignment-form-row,
   .assignment-control-card,

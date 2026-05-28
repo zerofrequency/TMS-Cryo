@@ -65,6 +65,24 @@ Do not use the `service_role` key in this file.
 
 For team development, each developer should create their own local `supabase-config.js`. This file is ignored by Git and must not be shared in commits.
 
+## Route map setup
+
+Trip Plan Detail can show an in-transit route map with MapLibre GL JS, OpenFreeMap tiles, and openrouteservice directions. Copy `map-config.example.js` to `map-config.js`, then set your local origin and optional openrouteservice key:
+
+```js
+window.TMS_MAP_CONFIG = {
+  provider: "openrouteservice",
+  openRouteServiceKey: "paste local key here",
+  origin: {
+    name: "Warehouse",
+    latitude: 34.0522,
+    longitude: -118.2437
+  }
+};
+```
+
+`map-config.js` is ignored by Git. If no openrouteservice key is provided, the page still draws a straight-line route preview when origin and FC coordinates exist.
+
 ## Hot FC weekly page
 
 `pages/fc-dashboard.html` shows FCs with a non-empty weekly appointment status. Select a week, choose an FC, enter the appointment status, and save. Clearing the status removes that FC from the selected week view. The list and Three.js map both hide empty weekly rows.
