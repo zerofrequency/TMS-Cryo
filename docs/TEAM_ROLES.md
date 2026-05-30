@@ -196,8 +196,8 @@ Responsibilities:
 
 - Review `git status` before commits or pushes.
 - Separate unrelated changes into different commits.
-- Confirm whether files belong in `pages/`, `scripts/`, `styles/`, `sql/`, `docs/`, or `docs/tasks/`.
-- Keep task documents and requirement documents discoverable.
+- Confirm whether files belong in `pages/`, `scripts/`, `styles/`, `sql/`, `docs/`, or local `docs/tasks/`.
+- Keep task documents and requirement documents discoverable while keeping local task handoffs out of GitHub.
 - Check that local-only files are not committed.
 - Watch for accidental credential or generated-data commits.
 - Maintain clean commit messages.
@@ -209,7 +209,7 @@ Examples of suitable tasks:
 
 - Commit only documentation changes while leaving development code uncommitted.
 - Check whether Carrier Billing files are ready to commit as one feature.
-- Move a task document to `docs/tasks/`.
+- Move a local task document to `docs/tasks/`.
 - Confirm `supabase-config.js` is not staged.
 - Review staged files before pushing.
 - Create a clear commit message for a completed task.

@@ -9,12 +9,14 @@ This repository is organized by browser entry points, page-specific assets, data
 - `README.md`: project overview, setup, and feature notes.
 - `CONTRIBUTING.md`: team workflow, branch naming, pull request expectations, and local setup rules.
 - `supabase-config.example.js`: safe template for local Supabase configuration.
+- `map-config.example.js`: safe template for local map configuration.
 
 ## Directories
 
 - `.github/`: GitHub collaboration files such as the pull request template.
 - `data/`: tracked reference data. Personal generated data exports are ignored by Git.
-- `docs/`: project documentation for contributors.
+- `docs/`: project documentation, requirements, workflow guides, and planning notes.
+- `docs/tasks/`: local dated task handoff files for role-based development work. This directory is ignored by Git.
 - `pages/`: secondary HTML pages.
 - `scripts/`: browser JavaScript files.
 - `sql/`: Supabase schema and migration SQL files.
@@ -28,10 +30,14 @@ The following files may exist on a developer machine, but they are ignored and s
 - `.env`
 - `.env.*`
 - `supabase-config.js`
+- `map-config.js`
 - `data/carrier-appointments.json`
+- `docs/tasks/`
 - imported `.csv`, `.xlsx`, and `.xls` files
 
 Keep `supabase-config.js` at the repository root because the browser pages load it from there. Do not move it into another folder.
+Keep `map-config.js` at the repository root when using local map credentials. Do not commit it.
+Keep role task handoffs in `docs/tasks/` for local coordination only. Do not commit them.
 
 ## Where to add new files
 
@@ -39,5 +45,6 @@ Keep `supabase-config.js` at the repository root because the browser pages load 
 - Add page behavior to `scripts/`.
 - Add page styling to `styles/`.
 - Add database changes to `sql/`.
-- Add contributor-facing documentation to `docs/`.
+- Add contributor-facing documentation, requirements, setup guides, and planning notes to `docs/`.
+- Add role task handoffs to local `docs/tasks/` using dated filenames. These files should stay untracked.
 - Add GitHub process files to `.github/`.

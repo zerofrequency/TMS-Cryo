@@ -38,7 +38,7 @@ docs/CARRIER_BILLING_REQUIREMENTS.md
 
 ### Task Handoff
 
-Use for implementation tasks assigned to a role.
+Use for local implementation tasks assigned to a role. Task handoff files are local coordination notes and should not be uploaded to GitHub.
 
 File naming:
 
