@@ -144,7 +144,7 @@
       setCloudStatus("Loading Supabase", "");
       const [bills, plans, carrierResources, carrierAssignments] = await Promise.all([
         supabaseRequest(`${BILL_TABLE}?select=*&order=updated_at.desc`),
-        supabaseRequest(`${TRIP_TABLE}?select=id,plan_name,plan_type,plan_status,plan_date,etd_date,etd_period,updated_at&order=etd_at.desc`),
+        supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`),
         supabaseRequest(`${CARRIER_RESOURCE_TABLE}?select=id,fleet_name`),
         supabaseRequest(`${CARRIER_ASSIGNMENT_TABLE}?select=*&order=created_at.desc`),
       ]);
@@ -455,6 +455,13 @@
       els.paidDate.focus();
       return;
     }
+    if (payload.billing_status === "Paid") {
+      const paidValidation = validatePaidTripPlan(payload.trip_plan_id);
+      if (!paidValidation.ok) {
+        setFormMessage(paidValidation.message, "error");
+        return;
+      }
+    }
     const existing = state.bills.find((bill) => bill.id === state.editingId);
     payload.change_log = nextChangeLog(existing, payload);
     try {
@@ -478,6 +485,10 @@
         state.bills = [created, ...state.bills];
         state.selectedId = created.id;
       }
+      if (payload.billing_status === "Paid") {
+        await lockDeliveredTripPlan(payload.trip_plan_id);
+        await loadData();
+      }
       fillCarrierFilter();
       hideForm();
       setCloudStatus("Saved", "connected");
@@ -485,6 +496,45 @@
       setFormMessage(error.message, "error");
       setCloudStatus(error.message, "error");
     }
+  }
+
+  function validatePaidTripPlan(tripPlanId) {
+    const plan = tripPlanFor(clean(tripPlanId));
+    if (!plan) {
+      return { ok: false, message: "Paid status requires a linked trip plan." };
+    }
+    if (plan.executionStatus !== "Delivered") {
+      return { ok: false, message: "Paid can only be saved when the linked trip plan execution status is Delivered." };
+    }
+    return { ok: true, message: "" };
+  }
+
+  async function lockDeliveredTripPlan(tripPlanId) {
+    const plan = tripPlanFor(clean(tripPlanId));
+    if (!plan || plan.controlStatus === "Locked") return;
+    const now = new Date().toISOString();
+    const logEntry = {
+      at: now,
+      action: "Control status updated",
+      field: "control_status",
+      from: plan.controlStatus,
+      to: "Locked",
+      message: "Carrier bill was paid. Trip plan control status changed to Locked.",
+    };
+    const changeLog = [...(Array.isArray(plan.changeLog) ? plan.changeLog : []), logEntry];
+    await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(plan.id)}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        control_status: "Locked",
+        plan_status: "Locked",
+        change_log: changeLog,
+        updated_at: now,
+      }),
+    });
+    plan.controlStatus = "Locked";
+    plan.status = tripPlanStatusLabel(plan.executionStatus, "Locked");
+    plan.changeLog = changeLog;
   }
 
   function formPayload() {
@@ -721,6 +771,13 @@
       setFormMessage("Paid status requires a paid date.", "error");
       return;
     }
+    if (els.billingStatus.value === "Paid") {
+      const paidValidation = validatePaidTripPlan(els.tripPlanId.value);
+      if (!paidValidation.ok) {
+        setFormMessage(paidValidation.message, "error");
+        return;
+      }
+    }
     if (els.formMessage.classList.contains("error")) setFormMessage("", "");
   }
 
@@ -786,8 +843,11 @@
     return {
       id: clean(row.id),
       name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
-      status: clean(row.plan_status) || "Planned",
+      executionStatus: normalizeExecutionStatus(row),
+      controlStatus: normalizeControlStatus(row),
+      status: tripPlanDisplayStatus(row),
       carrier: clean(carrierByPlan.get(clean(row.id))),
+      changeLog: Array.isArray(row.change_log) ? row.change_log : [],
       planDate: clean(row.plan_date),
       etdDate: clean(row.etd_date),
       etdPeriod: clean(row.etd_period),
@@ -851,6 +911,42 @@
 
   function statusChip(status) {
     return `<span class="status-chip status-${statusClass(status)}">${escapeHtml(status || "Draft")}</span>`;
+  }
+
+  function normalizeTripPlanStatus(status) {
+    const value = clean(status);
+    if (value === "Waiting") return "Pending";
+    if (value === "voided" || value === "Voided") return "Cancelled";
+    if (value === "Active" || !value) return "Planned";
+    return value;
+  }
+
+  function tripPlanDisplayStatus(row) {
+    const executionStatus = normalizeExecutionStatus(row);
+    const controlStatus = normalizeControlStatus(row);
+    return tripPlanStatusLabel(executionStatus, controlStatus);
+  }
+
+  function tripPlanStatusLabel(executionStatus, controlStatus) {
+    return controlStatus === "Active" ? executionStatus : `${executionStatus} / ${controlStatus}`;
+  }
+
+  function normalizeExecutionStatus(row) {
+    const value = clean(row.execution_status);
+    if (["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"].includes(value)) return value;
+    const legacy = normalizeTripPlanStatus(row.plan_status);
+    if (legacy === "Locked") return "Delivered";
+    return ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"].includes(legacy) ? legacy : "Planned";
+  }
+
+  function normalizeControlStatus(row) {
+    const value = clean(row.control_status);
+    if (["Active", "At Risk", "Cancelled", "Locked"].includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "At Risk") return "At Risk";
+    if (legacy === "Cancelled" || legacy === "voided" || legacy === "Voided") return "Cancelled";
+    if (legacy === "Locked") return "Locked";
+    return "Active";
   }
 
   function statusClass(status) {

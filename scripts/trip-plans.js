@@ -295,7 +295,9 @@
     const payload = {
       plan_name: clean(els.planName.value) || generateDefaultPlanName(stops),
       plan_type: els.planType.value,
-      plan_status: existingPlan?.plan_status || "Planned",
+      execution_status: existingPlan ? normalizeExecutionStatus(existingPlan) : "Planned",
+      control_status: existingPlan ? normalizeControlStatus(existingPlan) : "Active",
+      plan_status: existingPlan ? compatibilityPlanStatus(normalizeExecutionStatus(existingPlan), normalizeControlStatus(existingPlan)) : "Planned",
       plan_date: els.planDate.value || null,
       etd_date: els.etaDate.value,
       etd_period: els.etaPeriod.value,
@@ -316,7 +318,7 @@
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify(payload),
         });
-        await syncIsaBindings(state.editingPlanId, stops, payload.plan_status);
+        await syncIsaBindings(state.editingPlanId, stops, payload.control_status);
         setCloudStatus("Trip plan updated", "connected");
       } else {
         const inserted = await supabaseRequest(TRIP_TABLE, {
@@ -325,7 +327,7 @@
           body: JSON.stringify(payload),
         });
         const planId = clean(inserted?.[0]?.id);
-        if (planId) await syncIsaBindings(planId, stops, payload.plan_status);
+        if (planId) await syncIsaBindings(planId, stops, payload.control_status);
         setCloudStatus("Trip plan saved", "connected");
       }
       await loadPlans();
@@ -378,7 +380,7 @@
 
   async function syncIsaBindings(planId, stops, planStatus) {
     if (!state.supabase.enabled || !planId) return;
-    if (normalizePlanStatus(planStatus) === "voided") return;
+    if (normalizeControlStatus({ control_status: planStatus, plan_status: planStatus }) === "Cancelled") return;
 
     const desiredIsas = compactUnique((Array.isArray(stops) ? stops : [])
       .filter((stop) => clean(stop.source) === "appointment")
@@ -563,7 +565,7 @@
   function findActiveIsaConflict(stops) {
     const activePlans = state.plans.filter((plan) => {
       if (state.editingPlanId && clean(plan.id) === state.editingPlanId) return false;
-      return normalizePlanStatus(plan.plan_status) !== "voided";
+      return normalizeControlStatus(plan) !== "Cancelled";
     });
     const used = new Map();
     activePlans.forEach((plan) => {
@@ -585,9 +587,35 @@
 
   function normalizePlanStatus(status) {
     const value = clean(status);
-    if (value === "Voided") return "voided";
+    if (value === "Waiting") return "Pending";
+    if (value === "voided" || value === "Voided") return "Cancelled";
     if (value === "Active" || !value) return "Planned";
     return value;
+  }
+
+  function normalizeExecutionStatus(row) {
+    const value = clean(row.execution_status);
+    if (["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"].includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "Waiting") return "Pending";
+    if (legacy === "Locked") return "Delivered";
+    if (["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"].includes(legacy)) return legacy;
+    return "Planned";
+  }
+
+  function normalizeControlStatus(row) {
+    const value = clean(row.control_status);
+    if (["Active", "At Risk", "Cancelled", "Locked"].includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "At Risk") return "At Risk";
+    if (legacy === "Cancelled" || legacy === "voided" || legacy === "Voided") return "Cancelled";
+    if (legacy === "Locked") return "Locked";
+    return "Active";
+  }
+
+  function compatibilityPlanStatus(executionStatus, controlStatus) {
+    if (controlStatus === "Cancelled" || controlStatus === "At Risk" || controlStatus === "Locked") return controlStatus;
+    return executionStatus || "Planned";
   }
 
   function applyEditPlanFromUrl() {
@@ -680,14 +708,17 @@
           <div class="timeline-axis" aria-hidden="true"></div>
           <div class="timeline-items">
             ${appointments.sort(compareAppointments).map((appt) => `
-              <button class="calendar-appointment${planStatusByIsa.get(appt.isa) ? ` trip-bound status-${escapeAttr(statusClass(planStatusByIsa.get(appt.isa)))}` : ""}" type="button" draggable="true" data-isa="${escapeAttr(appt.isa)}" title="${escapeAttr(`${appt.isa} ${appt.fc}`)}">
+              <button class="calendar-appointment appt-status-${escapeAttr(appointmentStatusClass(appt.status))}${planStatusByIsa.get(appt.isa) ? ` trip-bound status-${escapeAttr(statusClass(planStatusByIsa.get(appt.isa)))}` : ""}" type="button" draggable="true" data-isa="${escapeAttr(appt.isa)}" title="${escapeAttr(`${appt.isa} ${appt.fc}`)}">
                 <time>${escapeHtml(calendarTimeLabel(appt.scheduleTime))}</time>
-                <div>
-                  <strong>${escapeHtml(appt.fc || "-")}</strong>
-                  <small>
-                    <span>${escapeHtml(appt.isa || "-")}</span>
-                    <em>${escapeHtml(appt.loadType || "Unassigned")}</em>
-                  </small>
+                <div class="timeline-item-body">
+                  <div class="timeline-item-main">
+                    <strong>${escapeHtml(appt.fc || "-")}</strong>
+                    <span class="timeline-isa">${escapeHtml(appt.isa || "-")}</span>
+                  </div>
+                  <div class="timeline-item-meta">
+                    <span class="status-pill ${escapeAttr(appointmentStatusClass(appt.status))}">${escapeHtml(appt.status || "Unknown")}</span>
+                    <span class="timeline-load load-type-${escapeAttr(loadTypeClass(appt.loadType))}">${escapeHtml(appt.loadType || "Unassigned")}</span>
+                  </div>
                 </div>
               </button>
             `).join("")}
@@ -726,7 +757,9 @@
   function buildPlanStatusByIsa() {
     const map = new Map();
     (Array.isArray(state.plans) ? state.plans : []).forEach((plan) => {
-      const status = normalizePlanStatus(plan.plan_status);
+      const executionStatus = normalizeExecutionStatus(plan);
+      const controlStatus = normalizeControlStatus(plan);
+      const status = controlStatus === "Active" ? executionStatus : `${executionStatus} / ${controlStatus}`;
       (Array.isArray(plan.stops) ? plan.stops : []).forEach((stop) => {
         const isa = clean(stop.isa);
         if (!isa) return;
@@ -740,6 +773,21 @@
     const value = clean(status).toLowerCase();
     if (!value) return "planned";
     return value.replace(/\s+/g, "-");
+  }
+
+  function appointmentStatusClass(status) {
+    const value = clean(status).toLowerCase();
+    if (value.includes("defect") || value.includes("cancel") || value.includes("reject") || value.includes("issue") || value.includes("delete") || value.includes("removed")) return "issue";
+    if (value.includes("close") || value.includes("complete") || value.includes("unloaded")) return "done";
+    if (value.includes("request") || value.includes("pending")) return "pending";
+    return "normal";
+  }
+
+  function loadTypeClass(loadType) {
+    const value = clean(loadType).toLowerCase();
+    if (value === "floorload") return "floorload";
+    if (value === "palletized") return "palletized";
+    return "unassigned";
   }
 
   function openAppointmentModal(isa) {

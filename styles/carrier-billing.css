@@ -1,5 +1,13 @@
 .billing-workspace {
-  grid-template-columns: 270px minmax(0, 1fr) 390px;
+  grid-template-columns: minmax(0, 1fr) 390px;
+}
+
+.billing-toolbar {
+  align-items: end;
+}
+
+.billing-workspace .table-wrap table {
+  min-width: 1080px;
 }
 
 .billing-stats strong {
@@ -175,9 +183,15 @@
   color: var(--ok);
 }
 
+.status-cancelled,
 .status-voided {
   background: #f4f4f5;
   color: var(--muted);
+}
+
+.status-at-risk {
+  background: #fff0ee;
+  color: var(--issue);
 }
 
 .overdue-text {
@@ -360,6 +374,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .button.compact {
@@ -384,7 +399,11 @@
 
 @media (max-width: 1180px) {
   .billing-workspace {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 1fr;
+  }
+
+  .billing-toolbar {
+    align-items: stretch;
   }
 
   .billing-detail-panel {
@@ -403,6 +422,30 @@
   }
 
   .form-actions {
+    flex-direction: column;
+  }
+
+  .detail-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .document-card,
+  .detail-section header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .row-actions,
+  .row-actions .button,
+  .document-actions,
+  .document-actions .button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .total-preview {
+    align-items: flex-start;
     flex-direction: column;
   }
 }

@@ -19,6 +19,7 @@ The first version should support a simple operational flow:
 
 ```text
 Trip Plan
+  -> Trip Plan Scheduled
   -> Create Carrier Bill
   -> Enter charge details
   -> Review billing status
@@ -150,6 +151,8 @@ Voided
 
 - A billing record may be linked to one Trip Plan.
 - One Trip Plan may have multiple billing records.
+- When a Trip Plan becomes `Scheduled`, the system should create a linked `Draft` carrier bill if one does not already exist.
+- Re-saving or re-entering `Scheduled` must not create duplicate draft bills for the same Trip Plan.
 - `total_amount` must be calculated from:
   - `base_freight`
   - `fuel_surcharge`

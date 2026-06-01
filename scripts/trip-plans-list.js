@@ -2,7 +2,9 @@
   "use strict";
 
   const TRIP_TABLE = "trip_plans";
-  const PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
+  const CARRIER_BILLS_TABLE = "carrier_bills";
+  const EXECUTION_STATUSES = ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"];
+  const CONTROL_STATUSES = ["Active", "At Risk", "Cancelled", "Locked"];
   const ETD_PERIODS = {
     "00-03": { label: "00:00-03:00", end: "03:00" },
     "03-06": { label: "03:00-06:00", end: "06:00" },
@@ -21,7 +23,8 @@
     inTransitCount: document.getElementById("inTransitCount"),
     issueCount: document.getElementById("issueCount"),
     searchInput: document.getElementById("searchInput"),
-    statusFilter: document.getElementById("statusFilter"),
+    executionStatusFilter: document.getElementById("executionStatusFilter"),
+    controlStatusFilter: document.getElementById("controlStatusFilter"),
     typeFilter: document.getElementById("typeFilter"),
     fromDate: document.getElementById("fromDate"),
     toDate: document.getElementById("toDate"),
@@ -46,7 +49,7 @@
   async function boot() {
     loadSupabaseConfig();
     bindEvents();
-    fillStatusFilter();
+    fillStatusFilters();
     if (!state.supabase.enabled) {
       setCloudStatus("Add anon key in supabase-config.js", "error");
       render();
@@ -56,13 +59,14 @@
   }
 
   function bindEvents() {
-    [els.searchInput, els.statusFilter, els.typeFilter, els.fromDate, els.toDate].forEach((element) => {
+    [els.searchInput, els.executionStatusFilter, els.controlStatusFilter, els.typeFilter, els.fromDate, els.toDate].forEach((element) => {
       element.addEventListener("input", render);
       element.addEventListener("change", render);
     });
     els.clearFilters.addEventListener("click", () => {
       els.searchInput.value = "";
-      els.statusFilter.value = "";
+      els.executionStatusFilter.value = "";
+      els.controlStatusFilter.value = "";
       els.typeFilter.value = "";
       els.fromDate.value = "";
       els.toDate.value = "";
@@ -77,7 +81,7 @@
     });
     els.planRows.addEventListener("change", (event) => {
       const select = event.target.closest("[data-status-plan]");
-      if (select) updatePlanStatus(select.dataset.statusPlan, select.value);
+      if (select) updatePlanStatus(select.dataset.statusPlan, select.dataset.statusField, select.value);
     });
     state.refreshTimer = window.setInterval(render, 60000);
   }
@@ -114,11 +118,11 @@
 
   function renderStats() {
     if (!els.totalCount || !els.activeCount || !els.inTransitCount || !els.issueCount) return;
-    const activePlans = state.plans.filter((plan) => plan.status !== "voided");
+    const activePlans = state.plans.filter((plan) => plan.controlStatus !== "Cancelled");
     els.totalCount.textContent = state.plans.length;
     els.activeCount.textContent = activePlans.length;
-    els.inTransitCount.textContent = state.plans.filter((plan) => plan.status === "In Transit").length;
-    els.issueCount.textContent = activePlans.filter((plan) => minBuffer(plan) !== null && minBuffer(plan) < 0).length;
+    els.inTransitCount.textContent = state.plans.filter((plan) => plan.executionStatus === "In Transit").length;
+    els.issueCount.textContent = activePlans.filter((plan) => plan.controlStatus === "At Risk" || (minBuffer(plan) !== null && minBuffer(plan) < 0)).length;
   }
 
   function renderRows(plans) {
@@ -140,8 +144,13 @@
             <small>${escapeHtml(plan.planDate || "No plan date")}</small>
           </td>
           <td>
-            <select class="status-select status-${statusClass(plan.status)}" data-status-plan="${escapeAttr(plan.id)}" aria-label="Plan status">
-              ${statusOptions(plan.status)}
+            <select class="status-select status-${statusClass(plan.executionStatus)}" data-status-plan="${escapeAttr(plan.id)}" data-status-field="execution_status" aria-label="Execution status">
+              ${executionStatusOptions(plan.executionStatus)}
+            </select>
+          </td>
+          <td>
+            <select class="status-select status-${statusClass(plan.controlStatus)}" data-status-plan="${escapeAttr(plan.id)}" data-status-field="control_status" aria-label="Control status">
+              ${controlStatusOptions(plan.controlStatus)}
             </select>
           </td>
           <td>${escapeHtml(plan.type || "-")}</td>
@@ -208,7 +217,7 @@
     els.detailView.innerHTML = `
       <div class="detail-title">
         <div>
-          <span class="fc-badge">${escapeHtml(plan.status)}</span>
+          <span class="fc-badge">${escapeHtml(plan.executionStatus)} / ${escapeHtml(plan.controlStatus)}</span>
           <h2>${escapeHtml(plan.name)}</h2>
         </div>
         <div class="detail-actions">
@@ -218,6 +227,8 @@
       </div>
       <dl class="meta">
         <div><dt>Plan Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
+        <div><dt>Execution</dt><dd>${escapeHtml(plan.executionStatus)}</dd></div>
+        <div><dt>Control</dt><dd>${escapeHtml(plan.controlStatus)}</dd></div>
         <div><dt>ETD</dt><dd>${escapeHtml(formatEta(plan))}</dd></div>
         <div><dt>Plan Date</dt><dd>${escapeHtml(plan.planDate || "-")}</dd></div>
         <div><dt>Transport</dt><dd>${escapeHtml(plan.transport || "-")}</dd></div>
@@ -274,12 +285,14 @@
 
   function filteredPlans() {
     const query = clean(els.searchInput.value).toLowerCase();
-    const status = els.statusFilter.value;
+    const executionStatus = els.executionStatusFilter.value;
+    const controlStatus = els.controlStatusFilter.value;
     const type = els.typeFilter.value;
     const from = els.fromDate.value;
     const to = els.toDate.value;
     return state.plans.filter((plan) => {
-      if (status && plan.status !== status) return false;
+      if (executionStatus && plan.executionStatus !== executionStatus) return false;
+      if (controlStatus && plan.controlStatus !== controlStatus) return false;
       if (type && plan.type !== type) return false;
       if (from && plan.etaDate < from) return false;
       if (to && plan.etaDate > to) return false;
@@ -288,8 +301,11 @@
     });
   }
 
-  function fillStatusFilter() {
-    els.statusFilter.innerHTML = '<option value="">All statuses</option>' + PLAN_STATUSES.map((status) => (
+  function fillStatusFilters() {
+    els.executionStatusFilter.innerHTML = '<option value="">All execution statuses</option>' + EXECUTION_STATUSES.map((status) => (
+      `<option value="${escapeAttr(status)}">${escapeHtml(status)}</option>`
+    )).join("");
+    els.controlStatusFilter.innerHTML = '<option value="">All control statuses</option>' + CONTROL_STATUSES.map((status) => (
       `<option value="${escapeAttr(status)}">${escapeHtml(status)}</option>`
     )).join("");
   }
@@ -306,7 +322,8 @@
       id: clean(row.id),
       name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
       type: clean(row.plan_type),
-      status: normalizeStatus(row.plan_status),
+      executionStatus: normalizeExecutionStatus(row),
+      controlStatus: normalizeControlStatus(row),
       planDate: clean(row.plan_date),
       etaDate: clean(row.etd_date),
       etaPeriod: clean(row.etd_period),
@@ -321,18 +338,31 @@
     };
   }
 
-  function normalizeStatus(status) {
-    const value = clean(status);
-    if (value === "Voided") return "voided";
-    if (value === "Active" || !value) return "Planned";
-    return value;
+  function normalizeExecutionStatus(row) {
+    const value = clean(row.execution_status);
+    if (EXECUTION_STATUSES.includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "Waiting") return "Pending";
+    if (legacy === "Locked") return "Delivered";
+    if (EXECUTION_STATUSES.includes(legacy)) return legacy;
+    return "Planned";
+  }
+
+  function normalizeControlStatus(row) {
+    const value = clean(row.control_status);
+    if (CONTROL_STATUSES.includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "At Risk") return "At Risk";
+    if (legacy === "Cancelled" || legacy === "voided" || legacy === "Voided") return "Cancelled";
+    if (legacy === "Locked") return "Locked";
+    return "Active";
   }
 
   function searchableText(plan) {
     const stopText = (Array.isArray(plan.stops) ? plan.stops : [])
       .map((stop) => [stop.isa, stop.destination, stop.schedule_time].join(" "))
       .join(" ");
-    return [plan.name, plan.type, plan.status, plan.planDate, plan.etaDate, plan.transport, plan.truckNumber, plan.trailerNumber, stopText].join(" ").toLowerCase();
+    return [plan.name, plan.type, plan.executionStatus, plan.controlStatus, plan.planDate, plan.etaDate, plan.transport, plan.truckNumber, plan.trailerNumber, stopText].join(" ").toLowerCase();
   }
 
   function minBuffer(plan) {
@@ -342,18 +372,30 @@
     return values.length ? Math.min(...values) : null;
   }
 
-  async function updatePlanStatus(planId, nextStatus) {
+  async function updatePlanStatus(planId, field, nextStatus) {
     if (!state.supabase.enabled || !planId) return;
     const plan = state.plans.find((item) => item.id === planId);
-    if (!plan || plan.status === nextStatus) return;
-    const previousStatus = plan.status;
+    const currentStatus = field === "control_status" ? plan?.controlStatus : plan?.executionStatus;
+    if (!plan || currentStatus === nextStatus) return;
+    const validation = validateStatusChange(plan, field, nextStatus);
+    if (!validation.ok) {
+      window.alert(validation.message);
+      render();
+      return;
+    }
+    const previousStatus = currentStatus;
+    const reason = reasonForStatus(field, nextStatus);
+    if (reason === null) {
+      render();
+      return;
+    }
     const logEntry = {
       at: new Date().toISOString(),
       action: "Status updated",
-      field: "plan_status",
+      field,
       from: previousStatus,
       to: nextStatus,
-      message: `Status changed from ${previousStatus} to ${nextStatus}`,
+      message: reason ? `Status changed from ${previousStatus} to ${nextStatus}. Reason: ${reason}` : `Status changed from ${previousStatus} to ${nextStatus}`,
     };
     const changeLog = [...plan.changeLog, logEntry];
     try {
@@ -362,12 +404,15 @@
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({
-          plan_status: nextStatus,
+          [field]: nextStatus,
+          plan_status: compatibilityPlanStatus(field === "execution_status" ? nextStatus : plan.executionStatus, field === "control_status" ? nextStatus : plan.controlStatus),
           change_log: changeLog,
           updated_at: new Date().toISOString(),
         }),
       });
-      plan.status = nextStatus;
+      if (field === "execution_status" && nextStatus === "Scheduled") await ensureDraftCarrierBill(plan);
+      if (field === "execution_status") plan.executionStatus = nextStatus;
+      if (field === "control_status") plan.controlStatus = nextStatus;
       plan.changeLog = changeLog;
       plan.updatedAt = logEntry.at;
       setCloudStatus("Status updated", "connected");
@@ -377,6 +422,58 @@
       setCloudStatus(error.message, "error");
       render();
     }
+  }
+
+  function validateStatusChange(plan, field, nextStatus) {
+    if (field === "execution_status" && !EXECUTION_STATUSES.includes(nextStatus)) return { ok: false, message: "Unsupported execution status." };
+    if (field === "control_status" && !CONTROL_STATUSES.includes(nextStatus)) return { ok: false, message: "Unsupported control status." };
+    if (field === "execution_status" && nextStatus === "Scheduled" && !planHasIsa(plan)) {
+      return { ok: false, message: "Planned to Scheduled requires at least one ISA and ETD." };
+    }
+    if (field === "execution_status" && nextStatus === "Pending") {
+      return { ok: window.confirm("Scheduled to Pending should have a carrier assignment. Continue without confirming carrier assignment?"), message: "Carrier assignment prompt cancelled." };
+    }
+    if (field === "execution_status" && nextStatus === "Loading") {
+      return { ok: false, message: "Pending to Loading requires dock and loading crew assignment. Open the detail page to assign resources." };
+    }
+    if (field === "execution_status" && nextStatus === "In Transit" && (!clean(plan.truckNumber) || !clean(plan.trailerNumber))) {
+      return { ok: false, message: "Loading to In Transit requires truck and trailer numbers." };
+    }
+    if (field === "control_status" && nextStatus === "Locked") {
+      return { ok: false, message: "Locked requires Delivered execution status, POD, and paid/settled carrier bill. Use the Trip Plan detail page for this validation." };
+    }
+    return { ok: true, message: "" };
+  }
+
+  function reasonForStatus(field, status) {
+    if (field !== "control_status" || (status !== "Cancelled" && status !== "At Risk")) return "";
+    const label = status === "Cancelled" ? "cancellation reason" : "risk reason";
+    const reason = clean(window.prompt(`Enter ${label}:`));
+    if (!reason) {
+      window.alert(`${status} requires a ${label}.`);
+      return null;
+    }
+    return reason;
+  }
+
+  function planHasIsa(plan) {
+    return (Array.isArray(plan.stops) ? plan.stops : []).some((stop) => clean(stop.isa));
+  }
+
+  async function ensureDraftCarrierBill(plan) {
+    const existing = await supabaseRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(plan.id)}&select=id,billing_status&limit=1`);
+    if (existing.length) return;
+    await supabaseRequest(CARRIER_BILLS_TABLE, {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        trip_plan_id: plan.id,
+        billing_status: "Draft",
+        carrier_name: "",
+        notes: "Auto-created when trip plan was scheduled.",
+        updated_at: new Date().toISOString(),
+      }),
+    });
   }
 
   async function supabaseRequest(path, options = {}) {
@@ -507,10 +604,21 @@
     return clean(status).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "unknown";
   }
 
-  function statusOptions(selectedStatus) {
-    return PLAN_STATUSES.map((status) => (
+  function executionStatusOptions(selectedStatus) {
+    return EXECUTION_STATUSES.map((status) => (
       `<option value="${escapeAttr(status)}" ${status === selectedStatus ? "selected" : ""}>${escapeHtml(status)}</option>`
     )).join("");
+  }
+
+  function controlStatusOptions(selectedStatus) {
+    return CONTROL_STATUSES.map((status) => (
+      `<option value="${escapeAttr(status)}" ${status === selectedStatus ? "selected" : ""}>${escapeHtml(status)}</option>`
+    )).join("");
+  }
+
+  function compatibilityPlanStatus(executionStatus, controlStatus) {
+    if (controlStatus === "Cancelled" || controlStatus === "At Risk" || controlStatus === "Locked") return controlStatus;
+    return executionStatus || "Planned";
   }
 
   function compactUnique(values) {

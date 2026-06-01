@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
+    <link rel="stylesheet" href="../styles/appointments.css" />
+    <link rel="stylesheet" href="../styles/inventory.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./resources.html">Resources</a>
+        <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
+        <a class="site-nav-link active" href="./inventory.html">Inventory</a>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
+
+    <main class="app-shell inventory-shell">
+      <header class="topbar">
+        <div>
+          <h1>Inventory</h1>
+          <p>Manage single-ticket inventory records by FC, ticket number, shipment/PO rows, references, product, weight, CBM, and cartons.</p>
+        </div>
+        <div class="actions">
+          <button id="newTicketButton" class="button primary" type="button">New Ticket</button>
+        </div>
+      </header>
+
+      <section class="filters top-toolbar inventory-toolbar" aria-label="Inventory filters">
+          <label class="filter-search">
+            Search
+            <input id="searchInput" name="inventorySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Ticket, shipment, PO, external ref, product, container, pallet..." />
+          </label>
+          <div class="filter-grid">
+            <label>
+              FC
+              <select id="fcFilter">
+                <option value="">All FCs</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select id="statusFilter">
+                <option value="">All statuses</option>
+              </select>
+            </label>
+          </div>
+          <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
+          <button id="exportButton" class="button" type="button">Export CSV</button>
+      </section>
+
+      <section class="workspace inventory-workspace">
+        <section class="table-panel" aria-label="Inventory ticket list">
+          <div class="table-header">
+            <div>
+              <h2>Ticket List</h2>
+              <p id="resultCount">No tickets loaded</p>
+            </div>
+            <div id="cloudStatus" class="import-status">Checking Supabase</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Inventory Ticket No</th>
+                  <th>External Ref No</th>
+                  <th>Product Name</th>
+                  <th>Container Ref</th>
+                  <th>Pallet Ref</th>
+                  <th>Linked Trip Plan</th>
+                  <th>FC</th>
+                  <th>Status</th>
+                  <th>Transport</th>
+                  <th>Exception</th>
+                  <th>Shipment / PO Count</th>
+                  <th>Weight (KG)</th>
+                  <th>CBM</th>
+                  <th>Cartons</th>
+                  <th>Updated At</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="ticketRows"></tbody>
+            </table>
+          </div>
+          <div id="emptyState" class="empty-state">
+            <h3>No inventory tickets loaded</h3>
+            <p>Create a ticket to start managing inventory.</p>
+          </div>
+        </section>
+
+        <aside id="detail" class="detail-panel" aria-label="Inventory ticket detail">
+          <div id="detailEmpty" class="detail-empty">
+            <h2>Details</h2>
+            <p>Select a ticket to review inventory fields and change log.</p>
+          </div>
+          <section id="detailView" class="detail-form hidden"></section>
+        </aside>
+      </section>
+
+      <section id="formPanel" class="inventory-form-panel hidden" aria-label="Inventory ticket form">
+        <div class="form-card">
+          <header>
+            <div>
+              <h2 id="formTitle">New Inventory Ticket</h2>
+              <p>One row represents one operational inventory ticket.</p>
+            </div>
+            <button id="cancelFormButton" class="icon-button" type="button" aria-label="Cancel form">×</button>
+          </header>
+          <form id="ticketForm" class="inventory-form">
+            <div class="form-grid">
+              <label>
+                Inventory Ticket No
+                <input id="inventoryTicketNo" type="text" required />
+              </label>
+              <label>
+                External Ref No
+                <input id="externalRefNo" type="text" />
+              </label>
+              <label>
+                Linked Trip Plan
+                <select id="tripPlanId">
+                  <option value="">No linked trip plan</option>
+                </select>
+              </label>
+              <label>
+                FC
+                <input id="fc" type="text" required />
+              </label>
+              <label>
+                Status
+                <select id="inventoryStatus" required></select>
+              </label>
+              <label>
+                Transport Status
+                <select id="transportStatus" required></select>
+              </label>
+              <label>
+                Exception Status
+                <select id="exceptionStatus" required></select>
+              </label>
+              <label>
+                Product Name
+                <input id="productName" type="text" />
+              </label>
+              <label>
+                Container Ref
+                <input id="containerRef" type="text" />
+              </label>
+              <label>
+                Pallet Ref
+                <input id="palletRef" type="text" />
+              </label>
+              <label>
+                Weight (KG)
+                <input id="weightKg" type="number" min="0" step="0.01" value="0" />
+              </label>
+              <label>
+                CBM
+                <input id="volumeCbm" type="number" min="0" step="0.001" value="0" />
+              </label>
+              <label>
+                Cartons
+                <input id="pieceCarton" type="number" min="0" step="1" value="0" />
+              </label>
+              <label class="full-span">
+                Remark
+                <textarea id="remark" rows="3"></textarea>
+              </label>
+            </div>
+            <section class="shipment-pair-editor">
+              <header>
+                <h3>Shipment ID / PO Rows</h3>
+                <button id="addShipmentRowButton" class="button compact neutral" type="button">Add Row</button>
+              </header>
+              <div id="shipmentRowsEditor" class="shipment-rows-editor"></div>
+            </section>
+            <p id="formMessage" class="form-message"></p>
+            <div class="form-actions">
+              <button class="button primary" type="submit">Save Ticket</button>
+              <button id="resetFormButton" class="button subtle" type="button">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
+    <script src="../scripts/inventory.js"></script>
+  </body>
+</html>

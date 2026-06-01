@@ -24,7 +24,7 @@
         <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./resources.html">Resources</a>
         <a class="site-nav-link active" href="./carrier-billing.html">Carrier Billing</a>
-        <span class="site-nav-link disabled">Inventory</span>
+        <a class="site-nav-link" href="./inventory.html">Inventory</a>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
     </nav>
@@ -37,7 +37,6 @@
         </div>
         <div class="actions">
           <button id="newBillButton" class="button primary" type="button">New Bill</button>
-          <button id="exportButton" class="button" type="button">Export CSV</button>
         </div>
       </header>
 
@@ -60,8 +59,7 @@
         </article>
       </section>
 
-      <section class="workspace billing-workspace">
-        <aside class="filters" aria-label="Carrier billing filters">
+      <section class="filters top-toolbar billing-toolbar" aria-label="Carrier billing filters">
           <label class="filter-search">
             Search
             <input id="searchInput" name="carrierBillingSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Carrier, invoice, plan, notes..." />
@@ -80,35 +78,42 @@
               </select>
             </label>
           </div>
-          <div class="filter-group">
-            <span class="filter-group-title">Invoice Date</span>
-            <div class="filter-grid date-filter-grid">
-              <label>
-                From
-                <input id="invoiceFrom" type="date" />
-              </label>
-              <label>
-                To
-                <input id="invoiceTo" type="date" />
-              </label>
+          <details class="more-filters">
+            <summary>More Filters</summary>
+            <div class="more-filter-panel">
+              <div class="filter-group">
+                <span class="filter-group-title">Invoice Date</span>
+                <div class="filter-grid date-filter-grid">
+                  <label>
+                    From
+                    <input id="invoiceFrom" type="date" />
+                  </label>
+                  <label>
+                    To
+                    <input id="invoiceTo" type="date" />
+                  </label>
+                </div>
+              </div>
+              <div class="filter-group">
+                <span class="filter-group-title">Due Date</span>
+                <div class="filter-grid date-filter-grid">
+                  <label>
+                    From
+                    <input id="dueFrom" type="date" />
+                  </label>
+                  <label>
+                    To
+                    <input id="dueTo" type="date" />
+                  </label>
+                </div>
+              </div>
             </div>
-          </div>
-          <div class="filter-group">
-            <span class="filter-group-title">Due Date</span>
-            <div class="filter-grid date-filter-grid">
-              <label>
-                From
-                <input id="dueFrom" type="date" />
-              </label>
-              <label>
-                To
-                <input id="dueTo" type="date" />
-              </label>
-            </div>
-          </div>
+          </details>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
-        </aside>
+          <button id="exportButton" class="button" type="button">Export CSV</button>
+      </section>
 
+      <section class="workspace billing-workspace">
         <section class="table-panel" aria-label="Carrier bill list">
           <div class="table-header">
             <div>

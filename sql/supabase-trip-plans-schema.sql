@@ -2,7 +2,9 @@ create table if not exists public.trip_plans (
   id uuid primary key default gen_random_uuid(),
   plan_name text,
   plan_type text not null check (plan_type in ('Single Drop', 'Two Drops', 'Three Drops', 'Four Drops')),
-  plan_status text not null default 'Planned' check (plan_status in ('voided', 'Planned', 'Waiting', 'Loading', 'In Transit', 'Delivered')),
+  plan_status text not null default 'Planned' check (plan_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered', 'Locked', 'Cancelled', 'At Risk')),
+  execution_status text not null default 'Planned' check (execution_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered')),
+  control_status text not null default 'Active' check (control_status in ('Active', 'At Risk', 'Cancelled', 'Locked')),
   plan_date date,
   etd_date date not null,
   etd_period text not null check (etd_period in ('00-03', '03-06', '06-09', '09-12', '12-15', '15-18', '18-21', '21-24', 'AM', 'PM')),
@@ -54,6 +56,12 @@ alter table public.trip_plans
 add column if not exists plan_status text not null default 'Planned';
 
 alter table public.trip_plans
+add column if not exists execution_status text not null default 'Planned';
+
+alter table public.trip_plans
+add column if not exists control_status text not null default 'Active';
+
+alter table public.trip_plans
 add column if not exists change_log jsonb not null default '[]'::jsonb;
 
 alter table public.trip_plans
@@ -71,11 +79,34 @@ drop constraint if exists trip_plans_etd_period_check;
 alter table public.trip_plans
 drop constraint if exists trip_plans_plan_status_check;
 
+alter table public.trip_plans
+drop constraint if exists trip_plans_execution_status_check;
+
+alter table public.trip_plans
+drop constraint if exists trip_plans_control_status_check;
+
 update public.trip_plans
-set plan_status = case
-  when plan_status in ('Voided', 'Active') then case when plan_status = 'Voided' then 'voided' else 'Planned' end
-  when plan_status is null or plan_status = '' then 'Planned'
-  else plan_status
+set execution_status = case
+  when plan_status = 'Waiting' then 'Pending'
+  when plan_status = 'Locked' then 'Delivered'
+  when plan_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered') then plan_status
+  when execution_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered') then execution_status
+  when plan_status = 'Active' then 'Planned'
+  else 'Planned'
+end,
+control_status = case
+  when plan_status in ('voided', 'Voided', 'Cancelled') then 'Cancelled'
+  when plan_status = 'At Risk' then 'At Risk'
+  when plan_status = 'Locked' then 'Locked'
+  when control_status in ('Active', 'At Risk', 'Cancelled', 'Locked') then control_status
+  else 'Active'
+end,
+plan_status = case
+  when plan_status = 'Waiting' then 'Pending'
+  when plan_status in ('voided', 'Voided') then 'Cancelled'
+  when plan_status = 'Active' then 'Planned'
+  when plan_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered', 'Locked', 'Cancelled', 'At Risk') then plan_status
+  else 'Planned'
 end;
 
 alter table public.trip_plans
@@ -83,7 +114,21 @@ alter column plan_status set default 'Planned';
 
 alter table public.trip_plans
 add constraint trip_plans_plan_status_check
-check (plan_status in ('voided', 'Planned', 'Waiting', 'Loading', 'In Transit', 'Delivered'));
+check (plan_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered', 'Locked', 'Cancelled', 'At Risk'));
+
+alter table public.trip_plans
+alter column execution_status set default 'Planned';
+
+alter table public.trip_plans
+add constraint trip_plans_execution_status_check
+check (execution_status in ('Planned', 'Scheduled', 'Pending', 'Loading', 'In Transit', 'Delivered'));
+
+alter table public.trip_plans
+alter column control_status set default 'Active';
+
+alter table public.trip_plans
+add constraint trip_plans_control_status_check
+check (control_status in ('Active', 'At Risk', 'Cancelled', 'Locked'));
 
 alter table public.trip_plans
 add constraint trip_plans_etd_period_check
@@ -93,6 +138,8 @@ create index if not exists trip_plans_etd_at_idx on public.trip_plans (etd_at);
 drop index if exists public.trip_plans_eta_at_idx;
 create index if not exists trip_plans_plan_date_idx on public.trip_plans (plan_date);
 create index if not exists trip_plans_plan_status_idx on public.trip_plans (plan_status);
+create index if not exists trip_plans_execution_status_idx on public.trip_plans (execution_status);
+create index if not exists trip_plans_control_status_idx on public.trip_plans (control_status);
 create index if not exists trip_plans_truck_number_idx on public.trip_plans (truck_number);
 create index if not exists trip_plans_trailer_number_idx on public.trip_plans (trailer_number);
 

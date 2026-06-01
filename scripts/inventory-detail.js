@@ -1,0 +1,214 @@
+(function () {
+  "use strict";
+
+  const TABLE = "inventory_tickets";
+  const SHIPMENT_TABLE = "inventory_ticket_shipments";
+  const TRIP_TABLE = "trip_plans";
+  const STATUSES = ["Draft", "Available", "Reserved", "Planned", "Shipped", "On Hold", "Cancelled"];
+  const TRANSPORT_STATUSES = ["Not Started", "In Transit", "Arrived", "Delivered"];
+  const EXCEPTION_STATUSES = ["None", "At Risk", "On Hold", "Damaged", "Lost", "Inspection", "Customs Hold"];
+
+  const els = {
+    ticketTitle: document.getElementById("ticketTitle"),
+    ticketSubtitle: document.getElementById("ticketSubtitle"),
+    editTicketLink: document.getElementById("editTicketLink"),
+    cloudStatus: document.getElementById("cloudStatus"),
+    errorState: document.getElementById("errorState"),
+    errorMessage: document.getElementById("errorMessage"),
+    detailContent: document.getElementById("detailContent"),
+    statusBadge: document.getElementById("statusBadge"),
+    overviewName: document.getElementById("overviewName"),
+    overviewMeta: document.getElementById("overviewMeta"),
+    shipmentRows: document.getElementById("shipmentRows"),
+    shipmentEmpty: document.getElementById("shipmentEmpty"),
+    changeLog: document.getElementById("changeLog"),
+  };
+
+  const state = {
+    supabase: { url: "", key: "", enabled: false },
+    ticketId: "",
+    ticket: null,
+    tripPlan: null,
+  };
+
+  boot();
+
+  async function boot() {
+    loadSupabaseConfig();
+    state.ticketId = new URLSearchParams(window.location.search).get("id") || "";
+    if (!state.ticketId) {
+      showError("Missing inventory ticket id. Open this page from Inventory.");
+      return;
+    }
+    els.editTicketLink.href = `./inventory.html?edit=${encodeURIComponent(state.ticketId)}`;
+    if (!state.supabase.enabled) {
+      showError("Add Supabase URL and anon key in supabase-config.js.");
+      setCloudStatus("Supabase not configured", "error");
+      return;
+    }
+    await loadTicket();
+  }
+
+  function loadSupabaseConfig() {
+    const config = window.CARRIER_APPT_SUPABASE || {};
+    state.supabase.url = clean(config.url).replace(/\/+$/, "");
+    state.supabase.key = clean(config.anonKey || config.key);
+    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  }
+
+  async function loadTicket() {
+    try {
+      setCloudStatus("Loading Supabase", "");
+      const [ticketRows, shipmentRows] = await Promise.all([
+        supabaseRequest(`${TABLE}?id=eq.${encodeURIComponent(state.ticketId)}&select=*&limit=1`),
+        supabaseRequest(`${SHIPMENT_TABLE}?inventory_ticket_id=eq.${encodeURIComponent(state.ticketId)}&select=*&order=created_at.asc`),
+      ]);
+      if (!ticketRows.length) {
+        showError("Inventory ticket not found in Supabase.");
+        setCloudStatus("Not found", "error");
+        return;
+      }
+      const childRows = shipmentRows.length ? shipmentRows.map(normalizeShipmentRow) : legacyShipmentRows(ticketRows[0]);
+      state.ticket = normalizeTicket(ticketRows[0], childRows);
+      await loadTripPlan(state.ticket.tripPlanId);
+      setCloudStatus("Connected", "connected");
+      render();
+    } catch (error) {
+      console.error(error);
+      showError(error.message);
+      setCloudStatus("Load failed", "error");
+    }
+  }
+
+  async function loadTripPlan(tripPlanId) {
+    state.tripPlan = null;
+    if (!tripPlanId) return;
+    try {
+      const rows = await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(tripPlanId)}&select=id,plan_name,plan_type,execution_status,control_status,etd_date&limit=1`);
+      state.tripPlan = rows.length ? normalizeTripPlan(rows[0]) : null;
+    } catch (error) {
+      console.warn(error);
+      state.tripPlan = null;
+    }
+  }
+
+  function render() {
+    const ticket = state.ticket;
+    if (!ticket) return;
+    els.errorState.classList.add("hidden");
+    els.detailContent.classList.remove("hidden");
+    els.ticketTitle.textContent = ticket.ticketNo;
+    els.ticketSubtitle.textContent = `${ticket.fc || "-"} · ${ticket.status} · ${ticket.shipments.length} Shipment/PO row${ticket.shipments.length === 1 ? "" : "s"}`;
+    els.overviewName.textContent = ticket.ticketNo;
+    els.statusBadge.className = `status-chip status-${statusClass(ticket.status)}`;
+    els.statusBadge.textContent = ticket.status;
+    els.overviewMeta.innerHTML = [
+      metaRow("Inventory Ticket No", ticket.ticketNo),
+      metaRow("External Ref No", ticket.externalRefNo || "-"),
+      metaRow("Product Name", ticket.productName || "-"),
+      metaRow("FC", ticket.fc),
+      metaRow("Inventory Status", ticket.status),
+      metaRow("Transport Status", ticket.transportStatus),
+      metaRow("Exception Status", ticket.exceptionStatus),
+      metaRow("Container Ref", ticket.containerRef || "-"),
+      metaRow("Pallet Ref", ticket.palletRef || "-"),
+      metaHtmlRow("Linked Trip Plan", renderTripPlanLink(ticket.tripPlanId)),
+      metaRow("Weight (KG)", numberText(ticket.weightKg, 2)),
+      metaRow("CBM", numberText(ticket.volumeCbm, 3)),
+      metaRow("Cartons", String(ticket.pieceCarton)),
+      metaRow("Remark", ticket.remark || "-"),
+      metaRow("Updated", formatDateTime(ticket.updatedAt)),
+    ].join("");
+    renderShipmentTable(ticket.shipments);
+    renderChangeLog(ticket.changeLog);
+  }
+
+  function renderShipmentTable(rows) {
+    els.shipmentEmpty.classList.toggle("hidden", rows.length > 0);
+    els.shipmentRows.innerHTML = rows.map((row, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(row.shipmentId)}</td>
+        <td><strong>${escapeHtml(row.po)}</strong></td>
+      </tr>
+    `).join("");
+  }
+
+  function renderChangeLog(changeLog) {
+    if (!changeLog.length) {
+      els.changeLog.innerHTML = '<p class="muted-note">No changes recorded.</p>';
+      return;
+    }
+    els.changeLog.innerHTML = changeLog.slice().reverse().map((entry) => `
+      <article class="ticket-log-entry">
+        <strong>${escapeHtml(entry.action || "Change")}</strong>
+        <span>${escapeHtml(formatDateTime(entry.at))}</span>
+        <p>${escapeHtml(entry.message || "")}</p>
+      </article>
+    `).join("");
+  }
+
+  async function supabaseRequest(path, options = {}) {
+    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
+      ...options,
+      headers: { apikey: state.supabase.key, Authorization: `Bearer ${state.supabase.key}`, "Content-Type": "application/json", ...(options.headers || {}) },
+    });
+    if (!response.ok) throw new Error(await response.text() || `Supabase request failed: ${response.status}`);
+    if (response.status === 204) return [];
+    const text = await response.text();
+    return text ? JSON.parse(text) : [];
+  }
+
+  function normalizeTicket(row, shipments) {
+    return {
+      id: clean(row.id), ticketNo: clean(row.inventory_ticket_no), externalRefNo: clean(row.external_ref_no),
+      productName: clean(row.product_name), containerRef: clean(row.container_ref), palletRef: clean(row.pallet_ref),
+      tripPlanId: clean(row.trip_plan_id), fc: clean(row.fc),
+      status: STATUSES.includes(clean(row.inventory_status)) ? clean(row.inventory_status) : "Draft",
+      transportStatus: TRANSPORT_STATUSES.includes(clean(row.transport_status)) ? clean(row.transport_status) : "Not Started",
+      exceptionStatus: EXCEPTION_STATUSES.includes(clean(row.exception_status)) ? clean(row.exception_status) : "None",
+      weightKg: amountValue(row.weight_kg), volumeCbm: amountValue(row.volume_cbm, 3), pieceCarton: integerValue(row.piece_carton),
+      remark: clean(row.remark), changeLog: Array.isArray(row.change_log) ? row.change_log : [], updatedAt: clean(row.updated_at), shipments,
+    };
+  }
+
+  function normalizeShipmentRow(row) {
+    return { id: clean(row.id), shipmentId: clean(row.shipment_id), po: clean(row.po) };
+  }
+
+  function normalizeTripPlan(row) {
+    const name = clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan";
+    const status = [clean(row.execution_status), clean(row.control_status)].filter(Boolean).join(" / ");
+    const date = clean(row.etd_date);
+    return { id: clean(row.id), label: [name, date, status].filter(Boolean).join(" · ") };
+  }
+
+  function renderTripPlanLink(tripPlanId) {
+    if (!tripPlanId) return "-";
+    const label = state.tripPlan ? state.tripPlan.label : tripPlanId;
+    return `<a class="ticket-detail-link" href="./trip-plan-detail.html?id=${encodeURIComponent(tripPlanId)}">${escapeHtml(label)}</a>`;
+  }
+
+  function legacyShipmentRows(row) {
+    const shipmentId = clean(row.shipment_id);
+    const po = clean(row.po);
+    return shipmentId && po ? [{ id: "", shipmentId, po }] : [];
+  }
+
+  function showError(message) {
+    els.errorMessage.textContent = message;
+    els.errorState.classList.remove("hidden");
+    els.detailContent.classList.add("hidden");
+  }
+
+  function metaRow(label, value) { return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`; }
+  function metaHtmlRow(label, valueHtml) { return `<div><dt>${escapeHtml(label)}</dt><dd>${valueHtml}</dd></div>`; }
+  function setCloudStatus(message, type) { els.cloudStatus.textContent = message; els.cloudStatus.classList.toggle("connected-text", type === "connected"); els.cloudStatus.classList.toggle("error-text", type === "error"); }
+  function statusClass(status) { return clean(status).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "draft"; }
+  function formatDateTime(value) { if (!value) return "-"; const date = new Date(value); return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat("en-US", { month: "2-digit", day: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(date); }
+  function numberText(value, digits) { return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
+  function amountValue(value, decimals = 2) { const number = Number(value); return Number.isFinite(number) ? Math.round(number * (10 ** decimals)) / (10 ** decimals) : 0; }
+  function integerValue(value) { const number = Number(value); return Number.isFinite(number) ? Math.trunc(number) : 0; }
+  function clean(value) { return value === null || value === undefined ? "" : String(value).trim(); }
+  function escapeHtml(value) { return clean(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]); }
+})();

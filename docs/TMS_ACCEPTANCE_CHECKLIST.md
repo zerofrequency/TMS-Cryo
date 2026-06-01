@@ -4,7 +4,8 @@ Use this checklist to verify that the current TMS demo can run the core business
 
 ## Setup
 
-- Open `index.html`.
+- Start the local development server from the project root with `python3 -m http.server 5173`.
+- Open `http://127.0.0.1:5173/`.
 - Confirm the navigation shows Home, Appt, Trip Plans, and Resources.
 - Confirm `supabase-config.js` exists locally and contains a valid Supabase URL and anon key.
 - Confirm required SQL files have been run in Supabase:
@@ -170,8 +171,8 @@ Assign resources to a trip plan and confirm resource availability changes.
 1. Open a Trip Plan detail page.
 2. Confirm trailer number and truck number are visible in the trip summary or execution area.
 3. In Planned stage, assign Fleet.
-4. In Waiting stage, assign Dock.
-5. In Waiting stage, assign Loading Crew and task slot.
+4. In Pending stage, assign Dock.
+5. In Pending stage, assign Loading Crew and task slot.
 6. Open Resource Dashboard.
 7. Confirm assigned resources show as in use or occupied.
 8. Return to Trip Plan detail.
@@ -210,7 +211,61 @@ Release active loading resources and move the trip into In Transit.
 - Active crew assignment becomes Completed.
 - Change log includes vehicle departure details.
 
-## Flow 9: Trip Status Review
+## Flow 9: Trip Status Workflow
+
+### Goal
+
+Confirm the Trip Plan status model follows the approved operational sequence.
+
+### Steps
+
+1. Create or open a Trip Plan in Planned status.
+2. Confirm ISA and ETA are present.
+3. Move the plan to Scheduled.
+4. Confirm a linked Draft carrier bill is created or available.
+5. Move the plan to Pending after carrier/resource planning.
+6. Assign dock and loading crew.
+7. Move the plan to Loading.
+8. Depart dock and confirm the plan becomes In Transit.
+9. Mark the plan Delivered.
+10. Upload POD.
+11. Confirm related carrier bill is paid or settled.
+12. Set control status to Locked.
+
+### Expected Results
+
+- Planned means the plan exists but needs ISA and ETA.
+- Scheduled means the plan is confirmed and ready for carrier matching/billing.
+- Pending means the plan is in the loading queue and waiting for loading.
+- Loading means warehouse loading has started.
+- In Transit means the vehicle has left the warehouse.
+- Delivered means delivery is complete and POD is required.
+- Locked means operations are complete, POD is uploaded, and billing is settled.
+- Locked, At Risk, and Cancelled are displayed separately from the normal execution stage flow.
+- Each execution status or control status movement creates a change log entry.
+
+## Flow 10: Trip Exception Statuses
+
+### Goal
+
+Confirm special Trip Plan statuses are handled separately from the normal flow.
+
+### Steps
+
+1. Set a non-final plan control status to At Risk and enter a risk reason.
+2. Confirm At Risk appears in filters, badges, and the Trip Plan Detail control-status area.
+3. Set a non-final plan control status to Cancelled and enter a cancellation reason.
+4. Confirm active ISA/resource bindings are released or cancelled.
+
+### Expected Results
+
+- At Risk means the plan cannot be completed on time or has material delay risk, but is not cancelled.
+- Cancelled means the plan is terminated.
+- Both control statuses require reasons.
+- Cancelled plans do not keep active ISA or resource assignments.
+- Trip Plan Detail keeps At Risk and Cancelled outside the regular execution stage flow.
+
+## Flow 11: Trip Status Review
 
 ### Goal
 
@@ -232,7 +287,7 @@ Review trip status, stop details, countdown, and change log.
 - Detail panel shows plan metadata, stops, countdown, and change log.
 - Detail page shows current stage and all stage views.
 
-## Flow 10: Known Enterprise Gaps
+## Flow 12: Known Enterprise Gaps
 
 These are expected gaps in the current demo and should not block demo acceptance:
 
@@ -244,5 +299,6 @@ These are expected gaps in the current demo and should not block demo acceptance
 - No shipment entity separate from trip plan.
 - No carrier billing.
 - No live tracking.
-- No full WMS inventory model.
+- Inventory MVP is ticket-level only; no full WMS SKU, bin, receiving, pick, pack, or cycle count model.
+- Inventory ticket fields include FC, status, weight KG, CBM, cartons, remark, system ticket number, Amazon Shipment ID/reference ID, external customer reference number, PO, and product name.
 - No automated test suite.

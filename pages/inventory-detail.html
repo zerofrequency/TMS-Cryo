@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Ticket Detail</title>
+    <link rel="stylesheet" href="../styles/site-nav.css" />
+    <link rel="stylesheet" href="../styles/appointments.css" />
+    <link rel="stylesheet" href="../styles/inventory.css" />
+  </head>
+  <body>
+    <nav class="site-nav" aria-label="Primary navigation">
+      <div class="site-nav-left">
+        <a class="site-brand" href="../index.html"><span class="site-brand-mark">TC</span>TMS Cryo</a>
+        <div class="nav-clocks" aria-label="Current time zones">
+          <span class="nav-clock-pill">CN <strong id="chinaClock">--</strong></span>
+          <span class="nav-clock-pill">LA <strong id="laClock">--</strong></span>
+          <span class="nav-clock-pill">NY <strong id="nyClock">--</strong></span>
+        </div>
+      </div>
+      <div class="site-nav-links">
+        <a class="site-nav-link" href="../index.html">Home</a>
+        <a class="site-nav-link" href="../appts.html">Appt</a>
+        <a class="site-nav-link" href="./trip-plans.html">Trip Plans</a>
+        <a class="site-nav-link" href="./resources.html">Resources</a>
+        <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
+        <a class="site-nav-link active" href="./inventory.html">Inventory</a>
+        <span class="site-nav-link disabled">Ocean Container</span>
+      </div>
+    </nav>
+
+    <main class="app-shell inventory-detail-shell">
+      <header class="topbar inventory-detail-topbar">
+        <div>
+          <a class="back-link" href="./inventory.html">Inventory</a>
+          <h1 id="ticketTitle">Inventory Ticket Detail</h1>
+          <p id="ticketSubtitle">Loading inventory ticket details.</p>
+        </div>
+        <div class="actions">
+          <a id="editTicketLink" class="button primary" href="./inventory.html">Edit Ticket</a>
+          <div id="cloudStatus" class="import-status">Checking Supabase</div>
+        </div>
+      </header>
+
+      <section id="errorState" class="empty-state inventory-detail-error hidden">
+        <h3>Inventory ticket not available</h3>
+        <p id="errorMessage">Open this page from an inventory ticket record.</p>
+      </section>
+
+      <section id="detailContent" class="inventory-detail-content hidden">
+        <section class="inventory-detail-panel" aria-label="Inventory ticket overview">
+          <header class="inventory-detail-heading">
+            <div>
+              <span id="statusBadge" class="status-chip status-draft">Draft</span>
+              <h2 id="overviewName">Inventory Ticket</h2>
+            </div>
+          </header>
+          <dl id="overviewMeta" class="inventory-detail-meta"></dl>
+        </section>
+
+        <section class="inventory-detail-panel" aria-label="Shipment ID and PO records">
+          <header class="inventory-detail-heading">
+            <div>
+              <h2>Shipment ID / PO Rows</h2>
+              <p>Each row binds one Shipment ID to one PO.</p>
+            </div>
+          </header>
+          <div class="table-wrap inventory-child-table-wrap">
+            <table class="inventory-child-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Shipment ID</th>
+                  <th>PO</th>
+                </tr>
+              </thead>
+              <tbody id="shipmentRows"></tbody>
+            </table>
+          </div>
+          <p id="shipmentEmpty" class="muted-note hidden">No Shipment ID / PO rows recorded.</p>
+        </section>
+
+        <section class="inventory-detail-panel" aria-label="Inventory ticket change log">
+          <header class="inventory-detail-heading">
+            <div>
+              <h2>Change Log</h2>
+              <p>Recent inventory ticket updates.</p>
+            </div>
+          </header>
+          <div id="changeLog" class="ticket-log-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="../supabase-config.js"></script>
+    <script src="../scripts/clocks.js"></script>
+    <script src="../scripts/inventory-detail.js"></script>
+  </body>
+</html>

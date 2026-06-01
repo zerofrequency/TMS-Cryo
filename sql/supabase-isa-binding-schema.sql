@@ -1,5 +1,5 @@
 -- Enforce: one ISA appointment can only be bound to one active trip plan,
--- unless the trip plan is voided (bindings are released).
+-- unless the trip plan is cancelled (bindings are released).
 
 create table if not exists public.trip_plan_isa_bindings (
   id uuid primary key default gen_random_uuid(),
@@ -18,12 +18,12 @@ create unique index if not exists trip_plan_isa_bindings_one_active_isa_idx
 on public.trip_plan_isa_bindings (isa)
 where binding_status = 'active';
 
-create or replace function public.release_isa_bindings_when_voided()
+create or replace function public.release_isa_bindings_when_cancelled()
 returns trigger
 language plpgsql
 as $$
 begin
-  if (new.plan_status = 'voided' and old.plan_status is distinct from 'voided') then
+  if (new.control_status = 'Cancelled' and old.control_status is distinct from 'Cancelled') then
     update public.trip_plan_isa_bindings
       set binding_status = 'released',
           updated_at = now()
@@ -34,11 +34,12 @@ begin
 end $$;
 
 drop trigger if exists trg_release_isa_bindings_when_voided on public.trip_plans;
-create trigger trg_release_isa_bindings_when_voided
-after update of plan_status
+drop trigger if exists trg_release_isa_bindings_when_cancelled on public.trip_plans;
+create trigger trg_release_isa_bindings_when_cancelled
+after update of control_status
 on public.trip_plans
 for each row
-execute function public.release_isa_bindings_when_voided();
+execute function public.release_isa_bindings_when_cancelled();
 
 alter table public.trip_plan_isa_bindings enable row level security;
 
@@ -57,4 +58,3 @@ for all
 to anon
 using (true)
 with check (true);
-

@@ -107,6 +107,8 @@
   position: sticky;
   top: 68px;
   padding: 16px;
+  max-height: calc(100vh - 92px);
+  overflow: auto;
 }
 
 .overview-head {
@@ -407,6 +409,14 @@ dd .overview-stop-list {
   overflow: hidden;
 }
 
+.stage-detail-panel table {
+  min-width: 820px;
+}
+
+.stage-detail-panel :where(.table-wrap, .resource-table-wrap) {
+  overflow: auto;
+}
+
 .readiness-list,
 .resource-summary-grid,
 .detail-stop-list {
@@ -503,6 +513,7 @@ dd .overview-stop-list {
 .stage-body {
   display: grid;
   gap: 10px;
+  min-width: 0;
   padding: 12px;
 }
 
@@ -776,7 +787,8 @@ dd .overview-stop-list {
   color: var(--accent);
 }
 
-.plan-status.status-waiting,
+.plan-status.status-scheduled,
+.plan-status.status-pending,
 .plan-status.status-loading {
   background: rgba(181, 71, 8, 0.12);
   color: var(--warning);
@@ -787,14 +799,20 @@ dd .overview-stop-list {
   color: var(--ok);
 }
 
-.plan-status.status-delivered {
+.plan-status.status-delivered,
+.plan-status.status-locked {
   background: #eef2f7;
   color: #344054;
 }
 
-.plan-status.status-voided {
+.plan-status.status-cancelled {
   background: #f4f4f5;
   color: var(--muted);
+}
+
+.plan-status.status-at-risk {
+  background: #fff0ee;
+  color: var(--issue);
 }
 
 .import-status.connected-text {
@@ -816,6 +834,7 @@ dd .overview-stop-list {
 
   .trip-overview-panel {
     position: static;
+    max-height: none;
   }
 }
 
@@ -838,5 +857,25 @@ dd .overview-stop-list {
   .stage-record-row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .stage-step strong,
+  .stage-step span {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 520px) {
+  .stage-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .document-actions,
+  .document-actions .button {
+    width: 100%;
   }
 }

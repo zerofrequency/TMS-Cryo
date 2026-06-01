@@ -5,8 +5,10 @@
   const FC_TABLE = "fba_fcs";
   const TRIP_TABLE = "trip_plans";
   const DOCUMENT_TABLE = "business_documents";
+  const CARRIER_BILLS_TABLE = "carrier_bills";
   const DOCUMENT_BUCKET = "business-documents";
-  const PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
+  const EXECUTION_STATUSES = ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"];
+  const CONTROL_STATUSES = ["Active", "At Risk", "Cancelled", "Locked"];
   const LOAD_TYPES = [
     { value: "Floorload", label: "Floorload", className: "floorload" },
     { value: "Palletized", label: "Palletized", className: "palletized" },
@@ -19,10 +21,16 @@
       description: "Bind ISA records and prepare inventory and carrier records before dispatch.",
     },
     {
-      key: "waiting",
-      status: "Waiting",
-      label: "waiting",
-      description: "Assign dock and loading crew resources while the truck waits for loading.",
+      key: "scheduled",
+      status: "Scheduled",
+      label: "scheduled",
+      description: "Confirm ISA and ETD, assign carrier, and prepare a draft carrier bill.",
+    },
+    {
+      key: "pending",
+      status: "Pending",
+      label: "pending",
+      description: "Assign dock and loading crew resources before active loading begins.",
     },
     {
       key: "loading",
@@ -41,12 +49,6 @@
       status: "Delivered",
       label: "delivered",
       description: "Review final plan timing, stops, and notes after delivery.",
-    },
-    {
-      key: "voided",
-      status: "voided",
-      label: "voided",
-      description: "Review the change log and optional void reason.",
     },
   ];
   const ETD_PERIODS = {
@@ -130,6 +132,7 @@
     detailTab: "overview",
     routeMap: null,
     resourceError: "",
+    carrierBills: [],
   };
 
   boot();
@@ -169,6 +172,7 @@
       const releaseButton = event.target.closest("[data-release-resource]");
       const cancelButton = event.target.closest("[data-cancel-resource]");
       const departButton = event.target.closest("[data-depart-loading]");
+      const statusButton = event.target.closest("[data-status-action]");
       const generateDocButton = event.target.closest("[data-generate-doc]");
       const openDocButton = event.target.closest("[data-open-doc]");
       const downloadDocButton = event.target.closest("[data-download-doc]");
@@ -176,6 +180,7 @@
       if (releaseButton) updateResourceAssignment(releaseButton.dataset.releaseType, releaseButton.dataset.releaseResource, "Completed");
       if (cancelButton) updateResourceAssignment(cancelButton.dataset.cancelType, cancelButton.dataset.cancelResource, "Cancelled");
       if (departButton) departFromLoading();
+      if (statusButton) updatePlanStatus(statusButton.dataset.statusField, statusButton.dataset.statusAction);
       if (generateDocButton) generateTripDocument(generateDocButton.dataset.generateDoc);
       if (openDocButton) openStoredDocument(openDocButton.dataset.openDoc);
       if (downloadDocButton) downloadTripDocument(downloadDocButton.dataset.downloadDoc);
@@ -223,8 +228,10 @@
         console.warn(resourceError);
         state.resourceError = resourceError.message;
       }
+      await loadRouteReferenceData();
       await loadDocuments();
-      state.selectedStage = statusToStageKey(state.plan.status);
+      await loadCarrierBills();
+      state.selectedStage = statusToStageKey(state.plan.executionStatus);
       setCloudStatus("Connected", "connected");
       render();
     } catch (error) {
@@ -242,25 +249,44 @@
     }
   }
 
+  async function loadCarrierBills() {
+    try {
+      state.carrierBills = await supabaseRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=*&order=updated_at.desc`);
+    } catch (error) {
+      state.carrierBills = [];
+    }
+  }
+
   async function loadStageResources() {
-    const [fleetItems, fleetAssignments, dockItems, dockAssignments, crewItems, crewAssignments, appointments, fcs] = await Promise.all([
+    const [fleetItems, fleetAssignments, dockItems, dockAssignments, crewItems, crewAssignments] = await Promise.all([
       supabaseRequest(`${RESOURCE_ENDPOINTS.fleet.resourceTable}?select=*`),
       supabaseRequest(`${RESOURCE_ENDPOINTS.fleet.assignmentTable}?select=*&order=created_at.desc`),
       supabaseRequest(`${RESOURCE_ENDPOINTS.dock.resourceTable}?select=*`),
       supabaseRequest(`${RESOURCE_ENDPOINTS.dock.assignmentTable}?select=*&order=created_at.desc`),
       supabaseRequest(`${RESOURCE_ENDPOINTS.crew.resourceTable}?select=*`),
       supabaseRequest(`${RESOURCE_ENDPOINTS.crew.assignmentTable}?select=*&order=created_at.desc`),
-      supabaseRequest(`${APPOINTMENTS_TABLE}?select=isa,fc,schedule_time_raw,load_type`),
-      supabaseRequest(`${FC_TABLE}?select=fc,latitude,longitude,city,state,address`),
     ]);
     state.resources = {
       fleet: { items: fleetItems, assignments: fleetAssignments },
       dock: { items: dockItems, assignments: dockAssignments },
       crew: { items: crewItems, assignments: crewAssignments },
     };
-    state.appointmentsByIsa = new Map(appointments.map((appointment) => [clean(appointment.isa), appointment]));
-    state.fcsByCode = new Map(fcs.map((fc) => [clean(fc.fc), fc]));
     state.resourceError = "";
+  }
+
+  async function loadRouteReferenceData() {
+    try {
+      const [appointments, fcs] = await Promise.all([
+        supabaseRequest(`${APPOINTMENTS_TABLE}?select=isa,fc,schedule_time_raw,load_type`),
+        supabaseRequest(`${FC_TABLE}?select=fc,latitude,longitude,city,state,address`),
+      ]);
+      state.appointmentsByIsa = new Map(appointments.map((appointment) => [clean(appointment.isa), appointment]));
+      state.fcsByCode = new Map(fcs.map((fc) => [clean(fc.fc), fc]));
+    } catch (error) {
+      console.warn(error);
+      state.appointmentsByIsa = new Map();
+      state.fcsByCode = new Map();
+    }
   }
 
   function render() {
@@ -269,9 +295,9 @@
     els.errorState.classList.add("hidden");
     els.detailContent.classList.remove("hidden");
     els.planTitle.textContent = plan.name;
-    els.planSubtitle.textContent = `${plan.type || "Trip Plan"} · ${formatEta(plan)} · ${plan.stops.length} stop${plan.stops.length === 1 ? "" : "s"}`;
-    els.statusBadge.textContent = plan.status;
-    els.statusBadge.className = `plan-status status-${statusClass(plan.status)}`;
+    els.planSubtitle.textContent = `${plan.type || "Trip Plan"} · ${formatEta(plan)} · ${plan.stops.length} stop${plan.stops.length === 1 ? "" : "s"} · ${plan.controlStatus}`;
+    els.statusBadge.textContent = `${plan.executionStatus} / ${plan.controlStatus}`;
+    els.statusBadge.className = `plan-status status-${statusClass(plan.controlStatus === "Active" ? plan.executionStatus : plan.controlStatus)}`;
     els.overviewName.textContent = plan.name;
     renderDetailTabs(plan);
     renderStageFlow(plan);
@@ -297,16 +323,16 @@
   }
 
   function renderStageFlow(plan) {
-    const currentKey = statusToStageKey(plan.status);
+    const currentKey = statusToStageKey(plan.executionStatus);
     const selectedKey = state.selectedStage;
     const currentIndex = STAGES.findIndex((stage) => stage.key === currentKey);
     els.stageFlow.innerHTML = STAGES.map((stage, index) => {
       const isCurrent = stage.key === currentKey;
       const isSelected = stage.key === selectedKey;
-      const isCompleted = currentKey !== "voided" && currentIndex > -1 && index < currentIndex;
+      const isCompleted = currentIndex > -1 && index < currentIndex;
       const classes = [
         "stage-step",
-        stage.key === "voided" ? "voided-stage" : "",
+        plan.controlStatus === "Cancelled" || plan.controlStatus === "Locked" ? "disabled-stage" : "",
         isCurrent ? "current" : "",
         isSelected ? "active" : "",
         isCompleted ? "completed" : "",
@@ -322,15 +348,19 @@
 
   function renderStageDetail(plan) {
     const stage = STAGES.find((item) => item.key === state.selectedStage) || STAGES[0];
-    els.stageEyebrow.textContent = stage.key === statusToStageKey(plan.status) ? "Current Stage" : "Stage Detail";
+    els.stageEyebrow.textContent = stage.key === statusToStageKey(plan.executionStatus) ? "Current Stage" : "Stage Detail";
     els.stageTitle.textContent = stage.label;
     els.stageDescription.textContent = stage.description;
     if (stage.key === "planned") {
       els.stageBody.innerHTML = renderPlannedStage(plan);
       return;
     }
-    if (stage.key === "waiting") {
-      els.stageBody.innerHTML = renderWaitingStage(plan);
+    if (stage.key === "scheduled") {
+      els.stageBody.innerHTML = renderScheduledStage(plan);
+      return;
+    }
+    if (stage.key === "pending") {
+      els.stageBody.innerHTML = renderPendingStage(plan);
       return;
     }
     if (stage.key === "loading") {
@@ -345,7 +375,6 @@
       els.stageBody.innerHTML = renderDeliveredStage(plan);
       return;
     }
-    els.stageBody.innerHTML = renderVoidedStage(plan);
   }
 
   function renderDocumentsSection(plan) {
@@ -406,7 +435,8 @@
 
   function renderOverview(plan) {
     return `
-      ${metaRow("Status", plan.status)}
+      ${metaRow("Execution Status", plan.executionStatus)}
+      ${metaRow("Control Status", plan.controlStatus)}
       ${metaRow("Plan Type", plan.type || "-")}
       ${metaRow("ETD", formatEta(plan))}
       ${metaRow("Plan Date", plan.planDate || "-")}
@@ -424,6 +454,7 @@
   function renderTripOverviewTab(plan) {
     const readinessItems = tripReadinessItems(plan);
     return `
+      ${renderControlStatusPanel(plan)}
       <section class="tab-section">
         <h3>Execution Status</h3>
         <dl class="overview-meta">
@@ -451,12 +482,14 @@
 
   function renderTripDetailsTab(plan) {
     return `
+      ${renderControlStatusPanel(plan)}
       <section class="tab-section">
         <h3>Shipment Details</h3>
         <dl class="overview-meta">
           ${metaRow("Trip Plan", plan.name)}
           ${metaRow("Plan Type", plan.type || "-")}
-          ${metaRow("Status", plan.status)}
+          ${metaRow("Execution Status", plan.executionStatus)}
+          ${metaRow("Control Status", plan.controlStatus)}
           ${metaRow("ETD Date", plan.etaDate || "-")}
           ${metaRow("ETD Period", ETD_PERIODS[plan.etaPeriod]?.label || plan.etaPeriod || "-")}
           ${metaRow("Transport", plan.transport || "-")}
@@ -475,6 +508,26 @@
           ${renderResourceSummaryCard("fleet", "Fleet")}
           ${renderResourceSummaryCard("dock", "Dock")}
           ${renderResourceSummaryCard("crew", "Loading Crew")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderControlStatusPanel(plan) {
+    const special = plan.controlStatus !== "Active";
+    return `
+      <section class="tab-section control-status-panel status-${statusClass(plan.controlStatus)}">
+        <h3>Control Status</h3>
+        <dl class="overview-meta">
+          ${metaRow("Control", plan.controlStatus)}
+          ${metaRow("Execution", plan.executionStatus)}
+          ${special ? metaRow("Reason", statusReason(plan, plan.controlStatus) || "Not provided") : ""}
+        </dl>
+        <div class="assignment-control-actions">
+          ${plan.controlStatus === "At Risk" ? `<button class="button compact neutral" type="button" data-status-field="control_status" data-status-action="Active">Resolve Risk</button>` : ""}
+          ${plan.controlStatus !== "At Risk" && plan.controlStatus !== "Cancelled" && plan.controlStatus !== "Locked" ? `<button class="button compact neutral" type="button" data-status-field="control_status" data-status-action="At Risk">At Risk</button>` : ""}
+          ${plan.controlStatus !== "Cancelled" && plan.controlStatus !== "Locked" ? `<button class="button compact danger" type="button" data-status-field="control_status" data-status-action="Cancelled">Cancel</button>` : ""}
+          ${plan.controlStatus !== "Locked" ? `<button class="button compact neutral" type="button" data-status-field="control_status" data-status-action="Locked">Lock</button>` : ""}
         </div>
       </section>
     `;
@@ -562,24 +615,49 @@
         </header>
         <div class="requirement-grid">
           <article class="requirement-item">
-            <span class="todo-chip">Pending table</span>
-            <strong>Inventory</strong>
-            <span>Inventory binding will be connected after the inventory module is created.</span>
+            <span class="${planHasIsa(plan) ? "ready-chip" : "todo-chip"}">${planHasIsa(plan) ? "Ready" : "Missing"}</span>
+            <strong>ISA Binding</strong>
+            <span>${escapeHtml(planHasIsa(plan) ? "At least one ISA is linked." : "Add an ISA before scheduling.")}</span>
           </article>
+          <article class="requirement-item">
+            <span class="${plan.etaDate ? "ready-chip" : "todo-chip"}">${plan.etaDate ? "Ready" : "Missing"}</span>
+            <strong>ETD</strong>
+            <span>${escapeHtml(formatEta(plan))}</span>
+          </article>
+        </div>
+      </section>
+      ${renderStatusActions("execution_status", ["Scheduled"])}
+    `;
+  }
+
+  function renderScheduledStage(plan) {
+    return `
+      <section class="stage-section">
+        <header>
+          <h3>Carrier Match</h3>
+          <span>Scheduled checklist</span>
+        </header>
+        <div class="requirement-grid">
           ${renderResourceRequirement("fleet", "Carrier")}
+          <article class="requirement-item">
+            <span class="${relatedCarrierBill() ? "ready-chip" : "todo-chip"}">${relatedCarrierBill() ? "Draft ready" : "Missing"}</span>
+            <strong>Carrier Bill</strong>
+            <span>${escapeHtml(relatedCarrierBill() ? `Status: ${relatedCarrierBill().billing_status || "Draft"}` : "A draft bill is created when this plan becomes Scheduled.")}</span>
+          </article>
         </div>
       </section>
       ${renderResourceAssignmentControl("fleet", "Carrier")}
       ${renderResourceAssignmentSection("fleet", "Carrier Assignment")}
+      ${renderStatusActions("execution_status", ["Pending"])}
     `;
   }
 
-  function renderWaitingStage(plan) {
+  function renderPendingStage(plan) {
     return `
       <section class="stage-section">
         <header>
           <h3>Dock and Loading Crew</h3>
-          <span>Waiting assignments</span>
+          <span>Pending assignments</span>
         </header>
         <div class="requirement-grid">
           ${renderResourceRequirement("dock", "Dock Assignment")}
@@ -590,6 +668,7 @@
       ${renderResourceAssignmentControl("crew", "Loading Crew")}
       ${renderResourceAssignmentSection("dock", "Dock Assignment")}
       ${renderResourceAssignmentSection("crew", "Loading Crew Assignment")}
+      ${renderStatusActions("execution_status", ["Loading"])}
     `;
   }
 
@@ -604,15 +683,16 @@
       </section>
       ${renderLoadingDepartureControl(plan)}
       ${renderResourceAssignmentSection("crew", "Loading Crew Assignment")}
+      ${renderStatusActions("control_status", ["At Risk", "Cancelled"])}
     `;
   }
 
   function renderLoadingDepartureControl(plan) {
     const activeDock = activeResourceAssignment("dock");
     const activeCrew = activeResourceAssignment("crew");
-    const alreadyDeparted = ["In Transit", "Delivered"].includes(plan.status);
+    const alreadyDeparted = ["In Transit", "Delivered"].includes(plan.executionStatus) || plan.controlStatus === "Locked";
     const missingDispatchFields = requiredDispatchFields(plan);
-    const disabled = plan.status === "voided" || alreadyDeparted || missingDispatchFields.length > 0;
+    const disabled = plan.controlStatus === "Cancelled" || alreadyDeparted || missingDispatchFields.length > 0;
     return `
       <section class="stage-section departure-control">
         <header>
@@ -637,7 +717,7 @@
 
   function renderInTransitStage(plan) {
     return `
-      ${plan.status === "In Transit" ? renderRouteMapPanel(plan) : ""}
+      ${renderRouteMapPanel(plan)}
       <section class="stage-section">
         <header>
           <h3>Transportation Progress</h3>
@@ -653,6 +733,7 @@
         </dl>
         <p class="muted-copy">Live progress, check calls, and exception milestones will be added in the transportation workflow.</p>
       </section>
+      ${renderStatusActions("execution_status", ["Delivered"])}
     `;
   }
 
@@ -687,7 +768,8 @@
           <span>Delivery summary</span>
         </header>
         <div class="review-list">
-          <div><span>Status</span><strong>${escapeHtml(plan.status)}</strong></div>
+          <div><span>Execution</span><strong>${escapeHtml(plan.executionStatus)}</strong></div>
+          <div><span>Control</span><strong>${escapeHtml(plan.controlStatus)}</strong></div>
           <div><span>ETD</span><strong>${escapeHtml(formatEta(plan))}</strong></div>
           <div><span>Stops</span><strong>${escapeHtml(String(plan.stops.length))}</strong></div>
           <div><span>Min Buffer</span><strong>${escapeHtml(formatBuffer(minBuffer(plan)))}</strong></div>
@@ -697,21 +779,13 @@
           <div><span>Notes</span><strong>${escapeHtml(plan.notes || "-")}</strong></div>
         </div>
       </section>
+      ${renderDocumentsSection(plan)}
+      ${renderStatusActions("control_status", ["Locked"])}
     `;
   }
 
-  function renderVoidedStage(plan) {
+  function renderChangeLogSection(plan) {
     return `
-      <section class="stage-section">
-        <header>
-          <h3>Void Reason</h3>
-          <span>Optional</span>
-        </header>
-        <div class="requirement-item">
-          <strong>${escapeHtml(plan.voidReason || "Not provided")}</strong>
-          <span>Void reason is optional and can be added later when the void workflow is expanded.</span>
-        </div>
-      </section>
       <section class="stage-section">
         <header>
           <h3>Change Log</h3>
@@ -722,8 +796,19 @@
     `;
   }
 
+  function renderStatusActions(field, statuses) {
+    return `
+      <section class="stage-section">
+        <header><h3>Status Actions</h3><span>Workflow</span></header>
+        <div class="assignment-control-actions">
+          ${statuses.map((status) => `<button class="button compact ${status === "Cancelled" ? "danger" : "neutral"}" type="button" data-status-field="${escapeAttr(field)}" data-status-action="${escapeAttr(status)}">${escapeHtml(status)}</button>`).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   function queueRouteMapRender(plan) {
-    if (state.selectedStage !== "in-transit" || plan.status !== "In Transit") {
+    if (state.selectedStage !== "in-transit") {
       destroyRouteMap();
       return;
     }
@@ -1099,6 +1184,27 @@
     return resource ? resourceLabel("fleet", resource) : "";
   }
 
+  function planHasIsa(plan) {
+    return (Array.isArray(plan.stops) ? plan.stops : []).some((stop) => clean(stop.isa));
+  }
+
+  function relatedCarrierBill() {
+    return state.carrierBills.find((bill) => clean(bill.trip_plan_id) === state.planId) || null;
+  }
+
+  function carrierBillSettled() {
+    const bill = relatedCarrierBill();
+    const status = clean(bill && bill.billing_status);
+    return status === "Paid" || status === "Approved";
+  }
+
+  function statusReason(plan, status) {
+    const entries = Array.isArray(plan.changeLog) ? plan.changeLog : [];
+    const entry = entries.slice().reverse().find((item) => clean(item.to) === status && clean(item.message).includes("Reason:"));
+    if (!entry) return "";
+    return clean(entry.message).split("Reason:").slice(1).join("Reason:").trim();
+  }
+
   function resourceTypeParam(type) {
     return type === "fleet" ? "carrier" : type;
   }
@@ -1189,7 +1295,8 @@
       id: clean(row.id),
       name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
       type: clean(row.plan_type),
-      status: normalizeStatus(row.plan_status),
+      executionStatus: normalizeExecutionStatus(row),
+      controlStatus: normalizeControlStatus(row),
       planDate: clean(row.plan_date),
       etaDate: clean(row.etd_date),
       etaPeriod: clean(row.etd_period),
@@ -1198,22 +1305,34 @@
       truckNumber: clean(row.truck_number),
       trailerNumber: clean(row.trailer_number),
       notes: clean(row.notes),
-      voidReason: clean(row.void_reason || row.voided_reason || row.void_reason_text),
       stops: Array.isArray(row.stops) ? row.stops : [],
       changeLog: Array.isArray(row.change_log) ? row.change_log : [],
       updatedAt: clean(row.updated_at),
     };
   }
 
-  function normalizeStatus(status) {
-    const value = clean(status);
-    if (value === "Voided") return "voided";
-    if (value === "Active" || !value) return "Planned";
-    return PLAN_STATUSES.includes(value) ? value : "Planned";
+  function normalizeExecutionStatus(row) {
+    const value = clean(row.execution_status);
+    if (EXECUTION_STATUSES.includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "Waiting") return "Pending";
+    if (legacy === "Locked") return "Delivered";
+    if (EXECUTION_STATUSES.includes(legacy)) return legacy;
+    return "Planned";
+  }
+
+  function normalizeControlStatus(row) {
+    const value = clean(row.control_status);
+    if (CONTROL_STATUSES.includes(value)) return value;
+    const legacy = clean(row.plan_status);
+    if (legacy === "At Risk") return "At Risk";
+    if (legacy === "Cancelled" || legacy === "voided" || legacy === "Voided") return "Cancelled";
+    if (legacy === "Locked") return "Locked";
+    return "Active";
   }
 
   function statusToStageKey(status) {
-    const normalized = normalizeStatus(status);
+    const normalized = clean(status);
     if (normalized === "In Transit") return "in-transit";
     return normalized.toLowerCase();
   }
@@ -1281,7 +1400,7 @@
       setCloudStatus(`Cannot depart: missing ${missingDispatchFields.join(" and ")}.`, "error");
       return;
     }
-    const previousStatus = state.plan.status;
+    const previousStatus = state.plan.executionStatus;
     const now = new Date().toISOString();
     const activeDock = activeResourceAssignment("dock");
     const activeCrew = activeResourceAssignment("crew");
@@ -1306,7 +1425,8 @@
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify({
-            plan_status: "In Transit",
+            execution_status: "In Transit",
+            plan_status: compatibilityPlanStatus("In Transit", state.plan.controlStatus),
             change_log: changeLog,
             updated_at: now,
           }),
@@ -1320,6 +1440,120 @@
       console.error(error);
       setCloudStatus(error.message, "error");
     }
+  }
+
+  async function updatePlanStatus(field, nextStatus) {
+    if (!state.plan || !state.planId) return;
+    const currentStatus = field === "control_status" ? state.plan.controlStatus : state.plan.executionStatus;
+    if (currentStatus === nextStatus) return;
+    const validation = validateStatusChange(state.plan, field, nextStatus);
+    if (!validation.ok) {
+      setCloudStatus(validation.message, "error");
+      return;
+    }
+    const reason = reasonForStatus(field, nextStatus);
+    if (reason === null) return;
+    const previousStatus = currentStatus;
+    const now = new Date().toISOString();
+    const logEntry = {
+      at: now,
+      action: "Status updated",
+      field,
+      from: previousStatus,
+      to: nextStatus,
+      message: reason ? `Status changed from ${previousStatus} to ${nextStatus}. Reason: ${reason}` : `Status changed from ${previousStatus} to ${nextStatus}.`,
+    };
+    const changeLog = [...state.plan.changeLog, logEntry];
+    const requests = [
+      supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify({
+          [field]: nextStatus,
+          plan_status: compatibilityPlanStatus(field === "execution_status" ? nextStatus : state.plan.executionStatus, field === "control_status" ? nextStatus : state.plan.controlStatus),
+          change_log: changeLog,
+          updated_at: now,
+        }),
+      }),
+    ];
+    if (field === "control_status" && nextStatus === "Cancelled") {
+      requests.push(...activeResourceReleaseRequests("Cancelled", now));
+    }
+    try {
+      setCloudStatus("Updating status", "");
+      await Promise.all(requests);
+      if (field === "execution_status" && nextStatus === "Scheduled") await ensureDraftCarrierBill();
+      await loadPlan();
+      state.selectedStage = statusToStageKey(field === "execution_status" ? nextStatus : state.plan.executionStatus);
+      setCloudStatus("Status updated", "connected");
+      render();
+    } catch (error) {
+      console.error(error);
+      setCloudStatus(error.message, "error");
+    }
+  }
+
+  function validateStatusChange(plan, field, nextStatus) {
+    if (field === "execution_status" && !EXECUTION_STATUSES.includes(nextStatus)) return { ok: false, message: "Unsupported execution status." };
+    if (field === "control_status" && !CONTROL_STATUSES.includes(nextStatus)) return { ok: false, message: "Unsupported control status." };
+    if (field === "execution_status" && nextStatus === "Scheduled" && (!planHasIsa(plan) || !plan.etaDate)) {
+      return { ok: false, message: "Planned to Scheduled requires ISA and ETD." };
+    }
+    if (field === "execution_status" && nextStatus === "Pending" && !activeResourceAssignment("fleet")) {
+      const proceed = window.confirm("Scheduled to Pending should have a carrier assignment. Continue without carrier?");
+      return { ok: proceed, message: "Carrier assignment required or prompt must be confirmed." };
+    }
+    if (field === "execution_status" && nextStatus === "Loading" && (!activeResourceAssignment("dock") || !activeResourceAssignment("crew"))) {
+      return { ok: false, message: "Pending to Loading requires dock and loading crew assignment." };
+    }
+    if (field === "execution_status" && nextStatus === "In Transit" && requiredDispatchFields(plan).length) {
+      return { ok: false, message: `Loading to In Transit requires ${requiredDispatchFields(plan).join(" and ")}.` };
+    }
+    if (field === "control_status" && nextStatus === "Locked" && (plan.executionStatus !== "Delivered" || !latestDocument("pod") || !carrierBillSettled())) {
+      return { ok: false, message: "Locked requires Delivered execution status, POD upload, and paid/settled carrier bill." };
+    }
+    return { ok: true, message: "" };
+  }
+
+  function reasonForStatus(field, status) {
+    if (field !== "control_status" || (status !== "Cancelled" && status !== "At Risk")) return "";
+    const label = status === "Cancelled" ? "cancellation reason" : "risk reason";
+    const reason = clean(window.prompt(`Enter ${label}:`));
+    if (!reason) {
+      setCloudStatus(`${status} requires a ${label}.`, "error");
+      return null;
+    }
+    return reason;
+  }
+
+  function activeResourceReleaseRequests(status, timestamp) {
+    return ["fleet", "dock", "crew"]
+      .map((type) => {
+        const assignment = activeResourceAssignment(type);
+        return assignment ? patchResourceAssignment(type, assignment.id, status, timestamp) : null;
+      })
+      .filter(Boolean);
+  }
+
+  async function ensureDraftCarrierBill() {
+    await loadCarrierBills();
+    if (state.carrierBills.length) return;
+    await supabaseRequest(CARRIER_BILLS_TABLE, {
+      method: "POST",
+      headers: { Prefer: "return=minimal" },
+      body: JSON.stringify({
+        trip_plan_id: state.planId,
+        billing_status: "Draft",
+        carrier_name: activeCarrierLabel(),
+        notes: "Auto-created when trip plan was scheduled.",
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  }
+
+  function compatibilityPlanStatus(executionStatus, controlStatus) {
+    if (controlStatus === "Cancelled" || controlStatus === "At Risk" || controlStatus === "Locked") return controlStatus;
+    return executionStatus || "Planned";
   }
 
   function requiredDispatchFields(plan) {
@@ -1473,7 +1707,7 @@
       documentType,
       tripPlanName: state.plan.name,
       tripPlanId: state.plan.id,
-      status: state.plan.status,
+      status: `${state.plan.executionStatus} / ${state.plan.controlStatus}`,
       etd: formatEta(state.plan),
       etaDate: state.plan.etaDate,
       etaPeriod: state.plan.etaPeriod,

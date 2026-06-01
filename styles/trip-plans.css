@@ -35,6 +35,8 @@ textarea {
 .trip-shell {
   min-height: 100vh;
   padding: 24px;
+  max-width: none;
+  margin-inline: auto;
 }
 
 .trip-header,
@@ -131,7 +133,7 @@ h3 {
   padding: 12px;
   position: sticky;
   top: 69px;
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 92px);
   overflow: auto;
 }
 
@@ -337,7 +339,7 @@ textarea:focus {
 .appointment-timeline {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(220px, 260px);
+  grid-auto-columns: minmax(220px, 248px);
   gap: 10px;
   align-items: start;
   min-width: 0;
@@ -452,19 +454,35 @@ textarea:focus {
 
 .calendar-appointment {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: 7px;
-  align-items: start;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
   width: 100%;
   border: 1px solid #c7d7ef;
-  border-left: 4px solid var(--load-type-border, #cbd5e1);
-  border-radius: 6px;
-  background: #eef5ff;
-  color: #163b69;
-  padding: 7px 8px;
+  border-left: 5px solid #7ddf9a;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 9px;
   cursor: grab;
   text-align: left;
   overflow: hidden;
+}
+
+.calendar-appointment.appt-status-normal {
+  border-left-color: #7ddf9a;
+}
+
+.calendar-appointment.appt-status-pending {
+  border-left-color: #ffbd73;
+}
+
+.calendar-appointment.appt-status-done {
+  border-left-color: #9aa4b2;
+}
+
+.calendar-appointment.appt-status-issue {
+  border-left-color: #f97066;
 }
 
 .calendar-appointment:active {
@@ -473,7 +491,7 @@ textarea:focus {
 
 .calendar-appointment:hover {
   border-color: var(--accent);
-  background: #dbeafe;
+  background: #eef5ff;
 }
 
 .calendar-appointment.trip-bound {
@@ -481,11 +499,11 @@ textarea:focus {
 }
 
 .calendar-appointment.trip-bound.status-planned {
-  background: rgb(7 134 3 / 12%);
-  color: #d95a23;
+  background: rgba(20, 104, 216, 0.12);
 }
 
-.calendar-appointment.trip-bound.status-waiting,
+.calendar-appointment.trip-bound.status-scheduled,
+.calendar-appointment.trip-bound.status-pending,
 .calendar-appointment.trip-bound.status-loading {
   background: rgba(181, 71, 8, 0.14);
   color: #5a2a07;
@@ -496,14 +514,40 @@ textarea:focus {
   color: #06452c;
 }
 
-.calendar-appointment.trip-bound.status-delivered {
+.calendar-appointment.trip-bound.status-delivered,
+.calendar-appointment.trip-bound.status-locked {
   background: #eef2f7;
   color: #344054;
 }
 
-.calendar-appointment.trip-bound.status-voided {
-  background: #eef5ff;
+.calendar-appointment.trip-bound.status-cancelled {
+  background: #f4f4f5;
   color: var(--muted);
+}
+
+.calendar-appointment.trip-bound.status-at-risk {
+  background: #fff0ee;
+  color: var(--issue);
+}
+
+.calendar-appointment.trip-bound.appt-status-normal,
+.calendar-appointment.appt-status-normal:hover {
+  border-left-color: #7ddf9a;
+}
+
+.calendar-appointment.trip-bound.appt-status-pending,
+.calendar-appointment.appt-status-pending:hover {
+  border-left-color: #ffbd73;
+}
+
+.calendar-appointment.trip-bound.appt-status-done,
+.calendar-appointment.appt-status-done:hover {
+  border-left-color: #9aa4b2;
+}
+
+.calendar-appointment.trip-bound.appt-status-issue,
+.calendar-appointment.appt-status-issue:hover {
+  border-left-color: #f97066;
 }
 
 .calendar-appointment:focus-visible {
@@ -515,7 +559,9 @@ textarea:focus {
 .calendar-appointment strong,
 .calendar-appointment small,
 .calendar-appointment small span,
-.calendar-appointment small em {
+.calendar-appointment small em,
+.calendar-appointment .timeline-isa,
+.calendar-appointment .timeline-load {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -524,14 +570,16 @@ textarea:focus {
 
 .calendar-appointment time {
   color: var(--muted);
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 13px;
+  font-weight: 900;
   white-space: nowrap;
 }
 
 .calendar-appointment strong {
-  font-size: 12px;
-  line-height: 1.1;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.15;
 }
 
 .calendar-appointment small {
@@ -550,6 +598,53 @@ textarea:focus {
 
 .calendar-appointment small span {
   display: inline;
+}
+
+.calendar-appointment .timeline-item-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.calendar-appointment .timeline-item-main,
+.calendar-appointment .timeline-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+  line-height: 1.22;
+}
+
+.calendar-appointment .timeline-isa {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.calendar-appointment .status-pill {
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.22;
+}
+
+.calendar-appointment .timeline-load {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.calendar-appointment .timeline-load.load-type-floorload {
+  color: #9a3412;
+}
+
+.calendar-appointment .timeline-load.load-type-palletized {
+  color: #067647;
 }
 
 .plans-list {
@@ -697,6 +792,11 @@ textarea:focus {
   .planner-layout {
     grid-template-columns: 1fr;
   }
+
+  .plan-form {
+    position: static;
+    max-height: none;
+  }
 }
 
 @media (max-width: 760px) {
@@ -721,5 +821,28 @@ textarea:focus {
 
   .button {
     width: 100%;
+  }
+
+  .calendar-panel {
+    min-height: 420px;
+  }
+
+  .appointment-timeline {
+    grid-auto-columns: minmax(210px, 82vw);
+  }
+}
+
+@media (max-width: 520px) {
+  h1 {
+    font-size: 26px;
+  }
+
+  .trip-shell {
+    padding-inline: 12px;
+  }
+
+  .detail-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }

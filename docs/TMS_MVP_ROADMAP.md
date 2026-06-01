@@ -10,7 +10,7 @@ Build a reliable TMS MVP that supports the core outbound transportation workflow
 2. Review appointment status, FC, schedule, CRDD, load type, and notes.
 3. Create trip plans from one or more appointments.
 4. Assign fleet, dock, and loading crew resources.
-5. Move a trip through planned, waiting, loading, in transit, delivered, or voided states.
+5. Move a trip through planned, scheduled, pending, loading, in transit, delivered, locked, cancelled, or at-risk states.
 6. Preserve operational history for review and later audit.
 
 ## Current TMS Scope
@@ -27,7 +27,6 @@ Build a reliable TMS MVP that supports the core outbound transportation workflow
 
 ### Deferred Modules
 
-- Inventory
 - Ocean Container
 - Carrier billing
 - Live transportation tracking
@@ -42,11 +41,13 @@ Carrier Central export
   -> Appointment review and load type update
   -> Trip plan creation
   -> ISA binding check
-  -> Fleet assignment
+  -> Schedule confirmation and carrier assignment
+  -> Carrier bill creation
   -> Dock and loading crew assignment
   -> Loading completion and dock departure
   -> In transit
-  -> Delivered or voided
+  -> Delivered with POD
+  -> Locked after bill settlement
 ```
 
 ## MVP Priorities
@@ -65,24 +66,31 @@ Carrier Central export
 
 - Replace free status changes with controlled workflow actions.
 - Add responsible trailer and truck number registration to Trip Plan execution.
-- Define allowed trip state transitions:
+- Define allowed trip execution state transitions:
 
 ```text
-Planned -> Waiting -> Loading -> In Transit -> Delivered
-Planned -> voided
-Waiting -> voided
-Loading -> voided
-In Transit -> Delivered
+execution_status: Planned -> Scheduled -> Pending -> Loading -> In Transit -> Delivered
+control_status: Active -> At Risk
+control_status: At Risk -> Active
+control_status: Active -> Cancelled
+control_status: At Risk -> Cancelled
+control_status: Active -> Locked
 ```
 
-- Require a reason when voiding a trip.
+- Keep `Locked`, `At Risk`, and `Cancelled` as control statuses outside the Trip Plan Detail stage flow.
+- Require a reason when setting `control_status = Cancelled`.
+- Require a risk reason when setting `control_status = At Risk`.
 - Add clear action buttons for status movement instead of relying on table dropdowns.
 - Add change log entries for every status movement.
+- Create or prepare a carrier bill when a plan moves to `Scheduled`.
 - Add resource validation before stage movement:
-  - Fleet must be assigned before leaving Planned.
+  - ISA and ETA must be confirmed before leaving Planned.
+  - Carrier should be assigned before entering Pending.
   - Trailer number and truck number should be recorded before dispatch.
   - Dock and loading crew should be assigned before entering Loading.
   - Active dock and crew assignments should be released when departing dock.
+  - POD should be uploaded before setting `control_status = Locked`.
+  - Carrier bill should be paid or settled before setting `control_status = Locked`.
 
 ### P2: Add Operational Exception Handling
 
@@ -105,6 +113,27 @@ In Transit -> Delivered
 
 - Add exception filters and counters to list pages.
 
+### P2: Inventory MVP
+
+- Add Inventory as a live standalone module.
+- Manage inventory by single ticket as the minimum unit.
+- Track FC, status, weight KG, CBM, cartons, remark, system ticket number, Amazon Shipment ID/reference ID, external customer reference number, PO, and product name.
+- Track lifecycle references: container before warehouse arrival, pallet after devanning, and outbound task after dispatch planning.
+- Link outbound task reference to Trip Plan when available for traceability.
+- Support create, edit, search, filter, detail view, and CSV export.
+- Keep Inventory independent operationally, but allow traceability links to Trip Plan through `trip_plan_id`.
+- Do not let Inventory links automatically change Trip Plan status, resources, or billing.
+
+### P2: Inventory Submodule - Amazon FC Transfer Request MVP
+
+- Add an Inventory submodule to track requests for changing Amazon destination FC from original FC to requested FC.
+- Build this as an MVP submodule with page, schema, Inventory entry point, search/filter, detail, edit, and CSV export.
+- Support repeated transfer request chains for the same goods, such as A-B-C, A-B-A, and A-B-C-D.
+- Track external Amazon confirmation status before treating the destination change as approved.
+- Link requests to inventory ticket, shipment ID, PO, product name, or container reference when available.
+- Prevent automatic Inventory, Appointment, or Trip Plan destination changes before Amazon approval.
+- Keep downstream update automation as a separately approved integration task.
+
 ### P3: Prepare Enterprise Architecture
 
 - Move write operations behind backend APIs.
@@ -118,6 +147,7 @@ Upload -> Parse -> Validate -> Preview changes -> Confirm -> Save -> Import log
 
 - Add automated tests for core business rules.
 - Separate TMS domain from future WMS domain.
+- Define enterprise Inventory/WMS architecture around goods, carriers, locations, state machine transitions, exception blocking, and inter-warehouse transfer.
 
 ## Recommended Data Model Direction
 
@@ -129,6 +159,12 @@ The current schema is enough for demo use. Enterprise TMS should evolve toward t
 - Facility
 - Appointment
 - Shipment
+- InventoryItem
+- InventoryCarrier
+- InventoryLocation
+- InventoryException
+- WarehouseTransfer
+- AmazonFcTransferRequest
 - TripPlan
 - TripStop
 - Carrier

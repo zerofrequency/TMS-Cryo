@@ -110,6 +110,43 @@ create unique index if not exists loading_crew_assignments_one_active_crew_idx
 on public.loading_crew_assignments (crew_id)
 where assignment_status = 'Active';
 
+create or replace function public.cancel_active_resource_assignments_when_trip_cancelled()
+returns trigger
+language plpgsql
+as $$
+begin
+  if (new.control_status = 'Cancelled' and old.control_status is distinct from 'Cancelled') then
+    update public.fleet_assignments
+      set assignment_status = 'Cancelled',
+          released_at = now(),
+          updated_at = now()
+    where trip_plan_id = new.id
+      and assignment_status = 'Active';
+
+    update public.dock_assignments
+      set assignment_status = 'Cancelled',
+          released_at = now(),
+          updated_at = now()
+    where trip_plan_id = new.id
+      and assignment_status = 'Active';
+
+    update public.loading_crew_assignments
+      set assignment_status = 'Cancelled',
+          released_at = now(),
+          updated_at = now()
+    where trip_plan_id = new.id
+      and assignment_status = 'Active';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_cancel_active_resource_assignments_when_trip_cancelled on public.trip_plans;
+create trigger trg_cancel_active_resource_assignments_when_trip_cancelled
+after update of control_status
+on public.trip_plans
+for each row
+execute function public.cancel_active_resource_assignments_when_trip_cancelled();
+
 alter table public.fleet_resources enable row level security;
 alter table public.dock_resources enable row level security;
 alter table public.loading_crews enable row level security;

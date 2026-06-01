@@ -23,7 +23,7 @@
         <a class="site-nav-link" href="./pages/trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./pages/resources.html">Resources</a>
         <a class="site-nav-link" href="./pages/carrier-billing.html">Carrier Billing</a>
-        <span class="site-nav-link disabled">Inventory</span>
+        <a class="site-nav-link" href="./pages/inventory.html">Inventory</a>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
     </nav>
@@ -40,12 +40,10 @@
           </label>
           <button id="addManualButton" class="button" type="button">Add Manually</button>
           <a class="button" href="./pages/fc-dashboard.html">Hot FCs</a>
-          <button id="exportButton" class="button" type="button">Export CSV</button>
         </div>
       </header>
 
-      <section class="workspace">
-        <aside class="filters" aria-label="Filters">
+      <section class="filters top-toolbar" aria-label="Appointment filters">
           <label class="filter-search">
             Search
             <input id="searchInput" name="appointmentSearch" type="search" autocomplete="off" spellcheck="false" placeholder="ISA, FC, status, reference..." />
@@ -81,8 +79,10 @@
             </label>
           </div>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
-        </aside>
+          <button id="exportButton" class="button" type="button">Export CSV</button>
+      </section>
 
+      <section class="workspace">
         <section class="table-panel" aria-label="Appointment list">
           <div class="table-header">
             <div>

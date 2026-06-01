@@ -18,7 +18,19 @@ If you use Git worktrees locally, treat them as an advanced personal setup only.
 
 ## Open
 
-Open `index.html` in a browser to use the module homepage. Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Create Trip Plan** from that page to add a new plan.
+Run a local development server from the project root, then open the homepage through HTTP:
+
+```sh
+python3 -m http.server 5173
+```
+
+```text
+http://127.0.0.1:5173/
+```
+
+Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Create Trip Plan** from that page to add a new plan. If port `5173` is already in use, run the same command with another local port and open that local URL. Avoid using `file://` as the normal testing path.
+
+See `docs/LOCAL_DEV_SERVER_GUIDE.md` for the full local testing workflow.
 
 ## Import
 

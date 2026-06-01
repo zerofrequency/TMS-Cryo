@@ -24,7 +24,7 @@
         <a class="site-nav-link active" href="./trip-plans.html">Trip Plans</a>
         <a class="site-nav-link" href="./resources.html">Resources</a>
         <a class="site-nav-link" href="./carrier-billing.html">Carrier Billing</a>
-        <span class="site-nav-link disabled">Inventory</span>
+        <a class="site-nav-link" href="./inventory.html">Inventory</a>
         <span class="site-nav-link disabled">Ocean Container</span>
       </div>
     </nav>
@@ -39,19 +39,26 @@
         </div>
       </header>
 
-      <section class="workspace trip-plan-workspace">
-        <aside class="filters" aria-label="Trip plan filters">
+      <section class="filters top-toolbar" aria-label="Trip plan filters">
           <label class="filter-search">
             Search
             <input id="searchInput" name="tripPlanSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Plan, ISA, destination, trailer, truck..." />
           </label>
           <div class="filter-grid">
             <label>
-              Status
-              <select id="statusFilter">
-                <option value="">All statuses</option>
+              Execution
+              <select id="executionStatusFilter">
+                <option value="">All execution statuses</option>
               </select>
             </label>
+            <label>
+              Control
+              <select id="controlStatusFilter">
+                <option value="">All control statuses</option>
+              </select>
+            </label>
+          </div>
+          <div class="filter-grid">
             <label>
               Plan Type
               <select id="typeFilter">
@@ -70,8 +77,9 @@
             </label>
           </div>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
-        </aside>
+      </section>
 
+      <section class="workspace trip-plan-workspace">
         <section class="table-panel" aria-label="Trip plan list">
           <div class="table-header">
             <div>
@@ -85,7 +93,8 @@
               <thead>
                 <tr>
                   <th>Plan</th>
-                  <th>Status</th>
+                  <th>Execution</th>
+                  <th>Control</th>
                   <th>Type</th>
                   <th>ETD</th>
                   <th>Stops</th>

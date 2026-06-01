@@ -17,7 +17,14 @@ This project uses a simple branch-and-pull-request workflow for team development
    git checkout -b feat/short-description
    ```
 
-3. Make the change, test it in a browser, and review the diff before committing.
+3. Make the change, test it through the local development server, and review the diff before committing.
+
+   ```sh
+   python3 -m http.server 5173
+   ```
+
+   Open `http://127.0.0.1:5173/`. If port `5173` is occupied, use another local port. Avoid `file://` for normal testing.
+   See `docs/LOCAL_DEV_SERVER_GUIDE.md` for the full local testing workflow.
 
    ```sh
    git status

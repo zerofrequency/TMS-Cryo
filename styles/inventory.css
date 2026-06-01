@@ -1,0 +1,451 @@
+.inventory-shell {
+  min-height: calc(100vh - 53px);
+}
+
+.inventory-workspace {
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.inventory-workspace .table-wrap table {
+  min-width: 1820px;
+}
+
+.inventory-workspace .detail-panel {
+  max-height: calc(100vh - 94px);
+  overflow: auto;
+}
+
+.ticket-detail-link {
+  color: var(--accent);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.ticket-detail-link:hover {
+  text-decoration: underline;
+}
+
+.inventory-detail-shell {
+  min-height: calc(100vh - 53px);
+}
+
+.inventory-detail-topbar {
+  align-items: flex-start;
+}
+
+.inventory-detail-topbar .actions {
+  align-items: flex-end;
+}
+
+.back-link {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.inventory-detail-content {
+  display: grid;
+  gap: 14px;
+}
+
+.inventory-detail-content.hidden,
+.inventory-detail-error.hidden {
+  display: none;
+}
+
+.inventory-detail-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.inventory-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 16px;
+}
+
+.inventory-detail-heading h2,
+.inventory-detail-heading p {
+  margin: 0;
+}
+
+.inventory-detail-heading h2 {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.inventory-detail-heading p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.inventory-detail-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 8px 16px 16px;
+}
+
+.inventory-detail-meta div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 8px;
+}
+
+.inventory-detail-meta dt {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.inventory-detail-meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.inventory-child-table-wrap {
+  padding: 0 16px 16px;
+}
+
+.inventory-child-table {
+  min-width: 520px;
+}
+
+.inventory-child-table th:first-child,
+.inventory-child-table td:first-child {
+  width: 60px;
+  text-align: right;
+}
+
+.inventory-child-table td {
+  overflow-wrap: anywhere;
+}
+
+.inventory-detail-panel > .muted-note {
+  margin: 0;
+  padding: 0 16px 16px;
+}
+
+.inventory-detail-panel > .ticket-log-list {
+  padding: 0 16px 16px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.status-draft {
+  background: #eef2f7;
+  color: #344054;
+}
+
+.status-available,
+.status-shipped {
+  background: #ecfdf3;
+  color: var(--ok);
+}
+
+.status-reserved,
+.status-planned {
+  background: rgba(20, 104, 216, 0.1);
+  color: var(--accent);
+}
+
+.status-on-hold {
+  background: rgba(181, 71, 8, 0.12);
+  color: var(--warning);
+}
+
+.status-cancelled {
+  background: #f4f4f5;
+  color: var(--muted);
+}
+
+.inventory-form-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.inventory-form-panel.hidden {
+  display: none;
+}
+
+.form-card {
+  width: min(840px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+}
+
+.form-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding: 16px;
+}
+
+.form-card h2,
+.form-card p {
+  margin: 0;
+}
+
+.form-card p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.inventory-form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.form-grid textarea {
+  resize: vertical;
+}
+
+.full-span {
+  grid-column: 1 / -1;
+}
+
+.form-message {
+  min-height: 18px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.form-message.error {
+  color: var(--issue);
+}
+
+.form-message.success {
+  color: var(--ok);
+}
+
+.shipment-pair-editor {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  padding: 12px;
+}
+
+.shipment-pair-editor header {
+  align-items: center;
+  border-bottom: 0;
+  padding: 0;
+}
+
+.shipment-pair-editor h3,
+.shipment-pair-detail h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.shipment-rows-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.shipment-pair-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+  align-items: end;
+  gap: 8px;
+}
+
+.shipment-pair-row label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.shipment-pair-row input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text);
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.shipment-pair-detail {
+  margin-top: 16px;
+}
+
+.shipment-pair-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.shipment-pair-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 9px;
+}
+
+.shipment-pair-list span,
+.shipment-pair-list strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.shipment-pair-list span {
+  color: var(--muted);
+}
+
+.ticket-log {
+  margin-top: 16px;
+}
+
+.ticket-log h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.ticket-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ticket-log-entry {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-soft);
+  padding: 9px;
+}
+
+.ticket-log-entry strong,
+.ticket-log-entry span,
+.ticket-log-entry p {
+  display: block;
+  margin: 0;
+}
+
+.ticket-log-entry span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ticket-log-entry p {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .inventory-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-workspace .detail-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inventory-detail-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .shipment-pair-row,
+  .shipment-pair-list article {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions,
+  .row-actions .button,
+  .detail-title .button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .inventory-form-panel {
+    padding: 10px;
+  }
+}

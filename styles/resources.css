@@ -415,6 +415,7 @@
 
 .resource-table-wrap {
   overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .resource-table-wrap table {
@@ -567,5 +568,33 @@
 
   .dock-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .resource-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-view-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-view-tab {
+    width: 100%;
+  }
+
+  .resource-card-head,
+  .resource-panel-head {
+    flex-direction: column;
+  }
+
+  .resource-actions,
+  .resource-actions .button {
+    width: 100%;
+  }
+
+  .dock-grid {
+    grid-template-columns: 1fr;
   }
 }

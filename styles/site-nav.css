@@ -1,3 +1,29 @@
+.site-nav,
+.site-nav *,
+.site-nav *::before,
+.site-nav *::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --panel-soft: #fbfcfd;
+  --text: #18202a;
+  --muted: #697382;
+  --border: #d9dee7;
+  --border-strong: #c2cad6;
+  --accent: #1468d8;
+  --accent-dark: #0f55b3;
+  --ok: #067647;
+  --warning: #b54708;
+  --issue: #b42318;
+  --shadow: 0 12px 30px rgba(22, 34, 51, 0.08);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --focus-ring: 0 0 0 3px rgba(20, 104, 216, 0.12);
+}
+
 .site-nav {
   position: sticky;
   top: 0;
@@ -104,9 +130,53 @@
 }
 
 .site-nav-link.disabled {
+  border-color: rgba(194, 202, 214, 0.45);
+  background: #f3f5f8;
   color: #9aa4b2;
   cursor: default;
   pointer-events: none;
+}
+
+.site-nav-link:focus-visible,
+.site-brand:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+:where(.app-shell, .trip-shell, .fc-shell, .home-shell) {
+  max-width: none;
+  margin-inline: auto;
+}
+
+:where(.button, .icon-button, .view-button, .resource-tab, .resource-view-tab, .detail-tab, .map-control-button):disabled,
+:where(.button, .icon-button, .view-button, .resource-tab, .resource-view-tab, .detail-tab, .map-control-button).disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+:where(input, select, textarea, button, a):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+:where(.import-status.connected-text, .form-message.success) {
+  color: var(--ok);
+}
+
+:where(.import-status.error-text, .form-message.error) {
+  color: var(--issue);
+}
+
+:where(.empty-state, .detail-empty, .empty-row, .timeline-empty, .empty-task) {
+  color: var(--muted);
+}
+
+:where(th) {
+  letter-spacing: 0;
+}
+
+:where(td, th, label, .button, .site-nav-link) {
+  line-height: 1.25;
 }
 
 @media (max-width: 720px) {
@@ -123,5 +193,18 @@
 
   .site-nav-links {
     justify-content: flex-start;
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
+
+@media (max-width: 520px) {
+  .site-brand {
+    width: 100%;
+  }
+
+  .site-nav-link {
+    min-height: 34px;
   }
 }

@@ -29,7 +29,8 @@ const state = {
   tripPlansByIsa: new Map(),
 };
 
-const TRIP_PLAN_STATUSES = ["Planned", "Waiting", "Loading", "In Transit", "Delivered", "voided"];
+const TRIP_PLAN_EXECUTION_STATUSES = ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"];
+const TRIP_PLAN_CONTROL_STATUSES = ["Active", "At Risk", "Cancelled", "Locked"];
 const ETD_PERIODS = {
   "00-03": { label: "00:00-03:00" },
   "03-06": { label: "03:00-06:00" },
@@ -308,16 +309,19 @@ async function loadRecordsFromSupabase() {
 }
 
 async function loadTripPlansByIsa() {
-  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=id,plan_name,plan_type,plan_status,etd_date,etd_period,transport_mode,stops,updated_at&order=etd_at.desc", { method: "GET" });
+  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=*&order=etd_at.desc", { method: "GET" });
   const byIsa = new Map();
   (rows || []).forEach((row) => {
-    const status = normalizeTripPlanStatus(row.plan_status);
-    if (status === "voided") return;
+    const executionStatus = normalizeExecutionStatus(row);
+    const controlStatus = normalizeControlStatus(row);
+    if (controlStatus === "Cancelled") return;
     const plan = {
       id: clean(row.id),
       name: clean(row.plan_name) || clean(row.plan_type) || "Untitled Plan",
       type: clean(row.plan_type),
-      status,
+      status: controlStatus === "Active" ? executionStatus : `${executionStatus} / ${controlStatus}`,
+      executionStatus,
+      controlStatus,
       etaDate: clean(row.etd_date),
       etaPeriod: clean(row.etd_period),
       transport: clean(row.transport_mode),
@@ -995,7 +999,7 @@ function renderTimelineItem(record) {
     </span>
   ` : "";
   return `
-    <button class="timeline-item load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}">
+    <button class="timeline-item appt-status-${escapeAttr(appointmentStatusClass(record.status))}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}">
       <time>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</time>
       <div class="timeline-item-body">
         <div class="timeline-item-main">
@@ -1004,7 +1008,7 @@ function renderTimelineItem(record) {
         </div>
         <div class="timeline-item-meta">
           <span class="status-pill ${statusClass(record.status)}">${escapeHtml(record.status || "Unknown")}</span>
-          <span class="timeline-load">${escapeHtml(record.loadType || "Unassigned")}</span>
+          <span class="timeline-load load-type-${escapeAttr(loadTypeMeta.className)}">${escapeHtml(record.loadType || "Unassigned")}</span>
           ${tripStatus}
         </div>
       </div>
@@ -1099,10 +1103,11 @@ function renderDetailTripPlan(record) {
     return;
   }
   const stop = plan.matchedStop || {};
+  const planHref = plan.id ? `./pages/trip-plan-detail.html?id=${encodeURIComponent(plan.id)}` : "./pages/trip-plans.html";
   els.detailTripPlanSummary.innerHTML = `
     <div class="matched-plan-head">
       <span class="plan-status-dot status-${escapeAttr(tripPlanStatusClass(plan.status))}">${escapeHtml(plan.status)}</span>
-      <a href="./pages/trip-plans.html" class="matched-plan-link">${escapeHtml(plan.name)}</a>
+      <a href="${escapeAttr(planHref)}" class="matched-plan-link">${escapeHtml(plan.name)}</a>
     </div>
     <dl class="matched-plan-meta">
       <div><dt>Type</dt><dd>${escapeHtml(plan.type || "-")}</dd></div>
@@ -1221,10 +1226,14 @@ async function deleteSelectedRecord() {
 
 function statusClass(status) {
   const normalized = clean(status).toLowerCase();
-  if (normalized.includes("defect") || normalized.includes("cancel") || normalized.includes("reject") || normalized.includes("issue")) return "issue";
+  if (normalized.includes("defect") || normalized.includes("cancel") || normalized.includes("reject") || normalized.includes("issue") || normalized.includes("delete") || normalized.includes("removed")) return "issue";
   if (normalized.includes("close") || normalized.includes("complete") || normalized.includes("unloaded")) return "done";
   if (normalized.includes("request") || normalized.includes("pending")) return "pending";
   return "";
+}
+
+function appointmentStatusClass(status) {
+  return statusClass(status) || "normal";
 }
 
 function tripPlanForRecord(record) {
@@ -1233,9 +1242,28 @@ function tripPlanForRecord(record) {
 
 function normalizeTripPlanStatus(status) {
   const value = clean(status);
-  if (value === "Voided") return "voided";
+  if (value === "Waiting") return "Pending";
+  if (value === "voided" || value === "Voided") return "Cancelled";
   if (value === "Active" || !value) return "Planned";
-  return TRIP_PLAN_STATUSES.includes(value) ? value : value;
+  return TRIP_PLAN_EXECUTION_STATUSES.includes(value) || TRIP_PLAN_CONTROL_STATUSES.includes(value) ? value : value;
+}
+
+function normalizeExecutionStatus(row) {
+  const value = clean(row.execution_status);
+  if (TRIP_PLAN_EXECUTION_STATUSES.includes(value)) return value;
+  const legacy = normalizeTripPlanStatus(row.plan_status);
+  if (legacy === "Locked") return "Delivered";
+  return TRIP_PLAN_EXECUTION_STATUSES.includes(legacy) ? legacy : "Planned";
+}
+
+function normalizeControlStatus(row) {
+  const value = clean(row.control_status);
+  if (TRIP_PLAN_CONTROL_STATUSES.includes(value)) return value;
+  const legacy = clean(row.plan_status);
+  if (legacy === "At Risk") return "At Risk";
+  if (legacy === "Cancelled" || legacy === "voided" || legacy === "Voided") return "Cancelled";
+  if (legacy === "Locked") return "Locked";
+  return "Active";
 }
 
 function tripPlanStatusClass(status) {

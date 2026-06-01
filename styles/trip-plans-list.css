@@ -1,5 +1,5 @@
 .trip-plan-workspace {
-  grid-template-columns: 260px minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 360px;
 }
 
 .import-status.connected-text {
@@ -108,6 +108,15 @@
   white-space: nowrap;
 }
 
+.trip-plan-workspace .table-wrap table {
+  min-width: 1120px;
+}
+
+.trip-plan-workspace .detail-panel {
+  max-height: calc(100vh - 94px);
+  overflow: auto;
+}
+
 .status-select {
   width: auto;
   min-width: 118px;
@@ -130,7 +139,8 @@
   color: var(--accent);
 }
 
-.status-waiting,
+.status-scheduled,
+.status-pending,
 .status-loading {
   background: rgba(181, 71, 8, 0.12);
   color: var(--warning);
@@ -141,14 +151,24 @@
   color: var(--ok);
 }
 
-.status-delivered {
+.status-delivered,
+.status-locked {
   background: #eef2f7;
   color: #344054;
 }
 
-.status-voided {
+.status-cancelled {
   background: #f4f4f5;
   color: var(--muted);
+}
+
+.status-at-risk {
+  background: #fff0ee;
+  color: var(--issue);
+}
+
+.status-select.status-cancelled {
+  border-color: rgba(105, 115, 130, 0.16);
 }
 
 .countdown-ok,
@@ -294,5 +314,32 @@
 @media (max-width: 1100px) {
   .trip-plan-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .trip-plan-workspace .detail-panel {
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .row-actions,
+  .detail-actions {
+    width: 100%;
+  }
+
+  .row-actions .button,
+  .detail-actions .button {
+    width: 100%;
+  }
+
+  .trip-stop header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .trip-stop dl div {
+    grid-template-columns: 1fr;
+    gap: 3px;
   }
 }
