@@ -4,6 +4,7 @@
   const APPOINTMENTS_TABLE = "appointments";
   const FC_TABLE = "fba_fcs";
   const TRIP_TABLE = "trip_plans";
+  const INVENTORY_TABLE = "inventory_tickets";
   const DOCUMENT_TABLE = "business_documents";
   const CARRIER_BILLS_TABLE = "carrier_bills";
   const DOCUMENT_BUCKET = "business-documents";
@@ -133,6 +134,7 @@
     routeMap: null,
     resourceError: "",
     carrierBills: [],
+    inventoryTickets: [],
   };
 
   boot();
@@ -231,6 +233,7 @@
       await loadRouteReferenceData();
       await loadDocuments();
       await loadCarrierBills();
+      await loadInventoryTickets();
       state.selectedStage = statusToStageKey(state.plan.executionStatus);
       setCloudStatus("Connected", "connected");
       render();
@@ -254,6 +257,14 @@
       state.carrierBills = await supabaseRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=*&order=updated_at.desc`);
     } catch (error) {
       state.carrierBills = [];
+    }
+  }
+
+  async function loadInventoryTickets() {
+    try {
+      state.inventoryTickets = await supabaseRequest(`${INVENTORY_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=id,trip_plan_id,inventory_ticket_no,inventory_status,fc,product_name,updated_at&order=updated_at.desc`);
+    } catch (error) {
+      state.inventoryTickets = [];
     }
   }
 
@@ -624,9 +635,35 @@
             <strong>ETD</strong>
             <span>${escapeHtml(formatEta(plan))}</span>
           </article>
+          ${renderInventoryRequirement()}
         </div>
       </section>
       ${renderStatusActions("execution_status", ["Scheduled"])}
+    `;
+  }
+
+  function renderInventoryRequirement() {
+    const tickets = linkedInventoryTickets();
+    return `
+      <article class="requirement-item inventory-requirement">
+        <span class="${tickets.length ? "ready-chip" : "todo-chip"}">${tickets.length ? `${tickets.length} linked` : "Optional"}</span>
+        <strong>Inventory</strong>
+        <span>${escapeHtml(tickets.length ? "Inventory tickets are linked to this trip plan." : "Open Inventory to link tickets to this trip plan.")}</span>
+        ${tickets.length ? `
+          <div class="requirement-link-list">
+            ${tickets.slice(0, 3).map((ticket) => `
+              <a href="./inventory-detail.html?id=${encodeURIComponent(clean(ticket.id))}">
+                ${escapeHtml(clean(ticket.inventory_ticket_no) || clean(ticket.id))}
+                <span>${escapeHtml(compactUnique([ticket.inventory_status, ticket.fc, ticket.product_name]).join(" · ") || "-")}</span>
+              </a>
+            `).join("")}
+            ${tickets.length > 3 ? `<span>${escapeHtml(`+${tickets.length - 3} more`)}</span>` : ""}
+          </div>
+        ` : ""}
+        <div class="requirement-actions">
+          <a class="button compact neutral" href="./inventory.html">Open Inventory</a>
+        </div>
+      </article>
     `;
   }
 
@@ -1190,6 +1227,11 @@
 
   function relatedCarrierBill() {
     return state.carrierBills.find((bill) => clean(bill.trip_plan_id) === state.planId) || null;
+  }
+
+  function linkedInventoryTickets() {
+    return (Array.isArray(state.inventoryTickets) ? state.inventoryTickets : [])
+      .filter((ticket) => !ticket.trip_plan_id || clean(ticket.trip_plan_id) === state.planId);
   }
 
   function carrierBillSettled() {

@@ -15,7 +15,8 @@ const state = {
   selectedKey: null,
   viewMode: "table",
   timelineAutoScrollPending: false,
-  calendarMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  calendarDate: startOfDay(new Date()),
+  calendarSubview: "week",
   sortKey: "scheduleTime",
   sortDirection: "asc",
   filters: {
@@ -67,7 +68,6 @@ const els = {
   issueCount: document.getElementById("issueCount"),
   resultCount: document.getElementById("resultCount"),
   importStatus: document.getElementById("importStatus"),
-  importChanges: document.getElementById("importChanges"),
   tableViewButton: document.getElementById("tableViewButton"),
   calendarViewButton: document.getElementById("calendarViewButton"),
   timelineViewButton: document.getElementById("timelineViewButton"),
@@ -76,8 +76,10 @@ const els = {
   timelineView: document.getElementById("timelineView"),
   prevMonthButton: document.getElementById("prevMonthButton"),
   nextMonthButton: document.getElementById("nextMonthButton"),
+  todayCalendarButton: document.getElementById("todayCalendarButton"),
   calendarTitle: document.getElementById("calendarTitle"),
   calendarGrid: document.getElementById("calendarGrid"),
+  calendarSubviewButtons: document.querySelectorAll("[data-calendar-subview]"),
   appointmentRows: document.getElementById("appointmentRows"),
   emptyState: document.getElementById("emptyState"),
   detailEmpty: document.getElementById("detailEmpty"),
@@ -108,6 +110,11 @@ const els = {
   manualLoadType: document.getElementById("manualLoadType"),
   manualReference: document.getElementById("manualReference"),
   manualTrailer: document.getElementById("manualTrailer"),
+  importSummaryModal: document.getElementById("importSummaryModal"),
+  importSummarySubtitle: document.getElementById("importSummarySubtitle"),
+  importSummaryBody: document.getElementById("importSummaryBody"),
+  closeImportSummaryButton: document.getElementById("closeImportSummaryButton"),
+  dismissImportSummaryButton: document.getElementById("dismissImportSummaryButton"),
 };
 
 async function boot() {
@@ -133,13 +140,25 @@ function bindEvents() {
     if (event.key === "Escape" && !els.manualPanel.classList.contains("hidden")) {
       closeManualPanel();
     }
+    if (event.key === "Escape" && !els.importSummaryModal.classList.contains("hidden")) {
+      closeImportSummaryModal();
+    }
   });
+  els.importSummaryModal.addEventListener("click", (event) => {
+    if (event.target === els.importSummaryModal) closeImportSummaryModal();
+  });
+  els.closeImportSummaryButton.addEventListener("click", closeImportSummaryModal);
+  els.dismissImportSummaryButton.addEventListener("click", closeImportSummaryModal);
   els.exportButton.addEventListener("click", exportCsv);
   els.tableViewButton.addEventListener("click", () => setViewMode("table"));
   els.calendarViewButton.addEventListener("click", () => setViewMode("calendar"));
   els.timelineViewButton.addEventListener("click", () => setViewMode("timeline"));
-  els.prevMonthButton.addEventListener("click", () => shiftCalendarMonth(-1));
-  els.nextMonthButton.addEventListener("click", () => shiftCalendarMonth(1));
+  els.prevMonthButton.addEventListener("click", () => shiftCalendarPeriod(-1));
+  els.nextMonthButton.addEventListener("click", () => shiftCalendarPeriod(1));
+  els.todayCalendarButton.addEventListener("click", () => jumpCalendarToToday());
+  els.calendarSubviewButtons.forEach((button) => {
+    button.addEventListener("click", () => setCalendarSubview(button.dataset.calendarSubview));
+  });
   els.searchInput.addEventListener("input", (event) => setFilter("search", event.target.value));
   els.fcFilter.addEventListener("change", (event) => setFilter("fc", event.target.value));
   els.statusFilter.addEventListener("change", (event) => setFilter("status", event.target.value));
@@ -458,6 +477,7 @@ async function handleFileUpload(event) {
     state.lastImportChanges = result.changes;
     setImportStatus(`Imported ${result.added} new, updated ${result.updated} from ${file.name}. Records are saved ${state.supabase.enabled ? "to Supabase" : "locally"}.`);
     render();
+    openImportSummaryModal(result, file.name);
   } catch (error) {
     console.error(error);
     setImportStatus(`Import failed: ${error.message}`);
@@ -474,6 +494,66 @@ function openManualPanel() {
 
 function closeManualPanel() {
   els.manualPanel.classList.add("hidden");
+}
+
+function openImportSummaryModal(result, fileName) {
+  const addedRecords = Array.isArray(result.addedRecords) ? result.addedRecords : [];
+  const updatedRecords = Array.isArray(result.updatedRecords) ? result.updatedRecords : result.changes || [];
+  const unchanged = Number.isFinite(Number(result.unchanged)) ? Number(result.unchanged) : 0;
+  els.importSummarySubtitle.textContent = clean(fileName) || "Appointment import results";
+  els.importSummaryBody.innerHTML = `
+    <div class="import-summary-counts" aria-label="Import counts">
+      <article><span>Added</span><strong>${escapeHtml(result.added || 0)}</strong></article>
+      <article><span>Updated</span><strong>${escapeHtml(result.updated || 0)}</strong></article>
+      <article><span>Unchanged</span><strong>${escapeHtml(unchanged)}</strong></article>
+    </div>
+    ${!addedRecords.length && !updatedRecords.length ? '<p class="import-summary-empty">No appointment changes detected.</p>' : ""}
+    ${renderAddedAppointments(addedRecords)}
+    ${renderUpdatedAppointments(updatedRecords)}
+  `;
+  els.importSummaryModal.classList.remove("hidden");
+  els.dismissImportSummaryButton.focus();
+}
+
+function closeImportSummaryModal() {
+  els.importSummaryModal.classList.add("hidden");
+}
+
+function renderAddedAppointments(records) {
+  if (!records.length) return "";
+  return `
+    <section class="import-summary-section">
+      <h3>New Appointments</h3>
+      <div class="import-summary-list">
+        ${records.slice(0, 25).map((record) => `
+          <article class="import-summary-record import-summary-row">
+            <strong>${escapeHtml(record.appointmentId || "-")}</strong>
+            <span>${escapeHtml(compactUnique([record.fc, record.status, record.scheduleTime, record.crdd, record.loadType || "Unassigned"]).join(" · ") || "-")}</span>
+          </article>
+        `).join("")}
+      </div>
+      ${records.length > 25 ? `<p class="import-summary-more">${escapeHtml(`${records.length - 25} more new appointments not shown.`)}</p>` : ""}
+    </section>
+  `;
+}
+
+function renderUpdatedAppointments(records) {
+  if (!records.length) return "";
+  return `
+    <section class="import-summary-section">
+      <h3>Updated Appointments</h3>
+      <div class="import-summary-list">
+        ${records.slice(0, 25).map((item) => `
+          <article class="import-summary-record import-summary-row">
+            <strong>${escapeHtml(item.isa || "-")}</strong>
+            <span>${escapeHtml(item.fc || "-")}</span>
+            <span>${escapeHtml((item.changes || []).map((change) => `${change.label}: ${change.oldValue || "-"} -> ${change.newValue || "-"}`).join("; ") || "-")}</span>
+          </article>
+        `).join("")}
+      </div>
+      ${records.length > 25 ? `<p class="import-summary-more">${escapeHtml(`${records.length - 25} more updated appointments not shown.`)}</p>` : ""}
+    </section>
+  `;
 }
 
 function clearManualFields() {
@@ -549,7 +629,10 @@ function rowsToRecords(rows, sourceName) {
 function mergeRecords(incoming) {
   let added = 0;
   let updated = 0;
+  let unchanged = 0;
   const changes = [];
+  const addedRecords = [];
+  const updatedRecords = [];
   const byIsa = new Map(state.records.filter((record) => record.appointmentId).map((record) => [record.appointmentId, record]));
   const byKey = new Map(state.records.map((record) => [record.key, record]));
 
@@ -570,8 +653,15 @@ function mergeRecords(incoming) {
           changes: recordChanges,
         };
         existing.changeLog = [logEntry, ...previousChangeLog].slice(0, 200);
-        changes.push({ isa: existing.appointmentId || record.appointmentId || record.referenceCode, fc: existing.fc || record.fc, changes: recordChanges });
+        changes.push({ isa: existing.appointmentId || record.appointmentId || record.referenceCode, fc: record.fc || existing.fc, changes: recordChanges });
+        updatedRecords.push({
+          isa: existing.appointmentId || record.appointmentId || record.referenceCode,
+          fc: record.fc || existing.fc,
+          changes: recordChanges,
+        });
         updated += 1;
+      } else {
+        unchanged += 1;
       }
       Object.assign(existing, {
         ...record,
@@ -585,11 +675,12 @@ function mergeRecords(incoming) {
       state.records.push(record);
       if (record.appointmentId) byIsa.set(record.appointmentId, record);
       byKey.set(record.key, record);
+      addedRecords.push(record);
       added += 1;
     }
   });
 
-  return { added, updated, changes };
+  return { added, updated, unchanged, changes, addedRecords, updatedRecords };
 }
 
 function collectImportChanges(existing, incoming) {
@@ -649,8 +740,28 @@ function setViewMode(mode) {
   render();
 }
 
-function shiftCalendarMonth(offset) {
-  state.calendarMonth = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth() + offset, 1);
+function setCalendarSubview(subview) {
+  if (!["day", "week", "month"].includes(subview)) return;
+  state.calendarSubview = subview;
+  renderCalendar();
+}
+
+function shiftCalendarPeriod(offset) {
+  const current = new Date(state.calendarDate);
+  if (state.calendarSubview === "day") {
+    current.setDate(current.getDate() + offset);
+  } else if (state.calendarSubview === "week") {
+    current.setDate(current.getDate() + offset * 7);
+  } else {
+    current.setMonth(current.getMonth() + offset);
+    current.setDate(1);
+  }
+  state.calendarDate = startOfDay(current);
+  renderCalendar();
+}
+
+function jumpCalendarToToday() {
+  state.calendarDate = startOfDay(new Date());
   renderCalendar();
 }
 
@@ -729,28 +840,11 @@ const timezoneOffsets = {
 function render() {
   renderStats();
   renderFilterOptions();
-  renderImportChanges();
   renderRows();
   renderViewMode();
   renderCalendar();
   renderTimeline();
   renderDetail();
-}
-
-function renderImportChanges() {
-  if (!state.lastImportChanges.length) {
-    els.importChanges.classList.add("hidden");
-    els.importChanges.innerHTML = "";
-    return;
-  }
-
-  const items = state.lastImportChanges.slice(0, 12).map((item) => {
-    const summary = item.changes.map((change) => `${change.label}: ${change.oldValue || "-"} -> ${change.newValue || "-"}`).join("; ");
-    return `<li><strong>${escapeHtml(item.isa || "-")}</strong> ${escapeHtml(item.fc || "")}: ${escapeHtml(summary)}</li>`;
-  }).join("");
-  const more = state.lastImportChanges.length > 12 ? `<p>${state.lastImportChanges.length - 12} more updated records not shown.</p>` : "";
-  els.importChanges.innerHTML = `<strong>Updated existing appointments in last import</strong><ul>${items}</ul>${more}`;
-  els.importChanges.classList.remove("hidden");
 }
 
 function renderStats() {
@@ -865,7 +959,19 @@ function renderViewMode() {
 
 function renderCalendar() {
   const records = getFilteredRecords();
-  const monthStart = new Date(state.calendarMonth.getFullYear(), state.calendarMonth.getMonth(), 1);
+  els.calendarSubviewButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.calendarSubview === state.calendarSubview);
+  });
+  if (state.calendarSubview === "month") {
+    renderMonthCalendar(records);
+  } else {
+    renderCalendarTimeGrid(records);
+  }
+}
+
+function renderMonthCalendar(records) {
+  els.calendarGrid.className = "calendar-grid calendar-month-grid";
+  const monthStart = new Date(state.calendarDate.getFullYear(), state.calendarDate.getMonth(), 1);
   const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
   const gridStart = new Date(monthStart);
   gridStart.setDate(monthStart.getDate() - monthStart.getDay());
@@ -881,10 +987,7 @@ function renderCalendar() {
     recordsByDay.set(key, items);
   });
 
-  els.calendarTitle.textContent = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(monthStart);
+  els.calendarTitle.textContent = formatCalendarTitle(monthStart, monthEnd);
 
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     .map((day) => `<div class="calendar-weekday">${day}</div>`)
@@ -914,7 +1017,7 @@ function renderCalendar() {
       `;
     }).join("");
     return `
-      <div class="calendar-day ${isCurrentMonth ? "" : "muted"} ${isToday ? "today" : ""}">
+      <div class="calendar-day-cell ${isCurrentMonth ? "" : "muted"} ${isToday ? "today" : ""}">
         <div class="calendar-date">${date.getDate()}</div>
         <div class="calendar-items">${items}</div>
       </div>
@@ -928,6 +1031,134 @@ function renderCalendar() {
       render();
     });
   });
+}
+
+function renderCalendarTimeGrid(records) {
+  els.calendarGrid.className = "calendar-grid calendar-time-scroll";
+  const dayCount = state.calendarSubview === "day" ? 1 : 7;
+  const rangeStart = state.calendarSubview === "day" ? startOfDay(state.calendarDate) : startOfWeek(state.calendarDate);
+  const rangeEnd = addDays(rangeStart, dayCount - 1);
+  const days = Array.from({ length: dayCount }, (_, index) => addDays(rangeStart, index));
+  const recordsByDay = recordsByDateKey(records);
+
+  els.calendarTitle.textContent = formatCalendarTitle(rangeStart, rangeEnd);
+
+  const dayHeaders = days.map((day) => {
+    const key = dateKey(day);
+    const weekday = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(day);
+    const isToday = key === dateKey(new Date());
+    return `
+      <div class="calendar-time-day-head ${isToday ? "today" : ""}">
+        <span>${escapeHtml(weekday)}</span>
+        <strong>${day.getDate()}</strong>
+      </div>
+    `;
+  }).join("");
+
+  const allDayItems = days.map((day) => {
+    const appointments = (recordsByDay.get(dateKey(day)) || []).filter((record) => !parseAppointmentDate(record.scheduleTime));
+    return `<div class="calendar-all-day-cell">${appointments.map(renderCalendarPill).join("")}</div>`;
+  }).join("");
+
+  const hourRows = Array.from({ length: 24 }, (_, hour) => {
+    const cells = days.map((day) => {
+      const appointments = (recordsByDay.get(dateKey(day)) || []).filter((record) => {
+        const date = parseAppointmentDate(record.scheduleTime);
+        return date && date.getHours() === hour && (date.getHours() !== 0 || date.getMinutes() !== 0);
+      });
+      return `<div class="calendar-hour-cell">${appointments.map(renderCalendarTimeItem).join("")}</div>`;
+    }).join("");
+    return `
+      <div class="calendar-hour-label">${pad2(hour)}:00</div>
+      ${cells}
+    `;
+  }).join("");
+
+  els.calendarGrid.innerHTML = `
+    <div class="calendar-time-grid ${state.calendarSubview === "day" ? "day-mode" : ""}" style="--calendar-days: ${dayCount}">
+      <div class="calendar-time-corner"></div>
+      ${dayHeaders}
+      <div class="calendar-all-day-label">All day</div>
+      ${allDayItems}
+      ${hourRows}
+    </div>
+  `;
+  bindCalendarRecordButtons();
+}
+
+function recordsByDateKey(records) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const date = parseAppointmentDate(record.scheduleTime);
+    if (!date) return;
+    const key = scheduleDateKey(record.scheduleTime) || dateKey(date);
+    const items = groups.get(key) || [];
+    items.push(record);
+    groups.set(key, items.sort(compareRecords));
+  });
+  return groups;
+}
+
+function renderCalendarPill(record) {
+  const selected = record.key === state.selectedKey ? " selected" : "";
+  const loadTypeMeta = getLoadTypeMeta(record.loadType);
+  const matchedPlan = tripPlanForRecord(record);
+  const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
+  const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
+  return `
+    <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+      <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
+    </button>
+  `;
+}
+
+function renderCalendarTimeItem(record) {
+  const selected = record.key === state.selectedKey ? " selected" : "";
+  const loadTypeMeta = getLoadTypeMeta(record.loadType);
+  const matchedPlan = tripPlanForRecord(record);
+  const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
+  const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
+  return `
+    <button class="calendar-time-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+      <span>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</span>
+      <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
+    </button>
+  `;
+}
+
+function bindCalendarRecordButtons() {
+  els.calendarGrid.querySelectorAll("button[data-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedKey = button.dataset.key;
+      render();
+    });
+  });
+}
+
+function startOfWeek(date) {
+  const value = startOfDay(date);
+  value.setDate(value.getDate() - value.getDay());
+  return value;
+}
+
+function addDays(date, days) {
+  const value = new Date(date);
+  value.setDate(value.getDate() + days);
+  return value;
+}
+
+function formatCalendarTitle(start, end) {
+  if (state.calendarSubview === "month") {
+    return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" }).format(start);
+  }
+  if (dateKey(start) === dateKey(end)) {
+    return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(start);
+  }
+  const sameMonth = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth();
+  if (sameMonth) {
+    return `${new Intl.DateTimeFormat("en-US", { month: "long" }).format(start)} ${start.getDate()}-${end.getDate()}, ${end.getFullYear()}`;
+  }
+  return `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(start)} - ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(end)}`;
 }
 
 function renderTimeline() {

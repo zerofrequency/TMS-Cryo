@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Carrier Appointment Manager</title>
     <link rel="stylesheet" href="./styles/site-nav.css" />
-    <link rel="stylesheet" href="./styles/appointments.css" />
+    <link rel="stylesheet" href="./styles/appointments.css?v=20260601-import-summary-float" />
   </head>
   <body>
     <nav class="site-nav" aria-label="Primary navigation">
@@ -96,7 +96,6 @@
             </div>
             <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Configure Supabase for cloud sync.</div>
           </div>
-          <div id="importChanges" class="import-changes hidden"></div>
           <div id="tableView" class="table-wrap">
             <table>
               <thead>
@@ -115,9 +114,17 @@
           </div>
           <div id="calendarView" class="calendar-view hidden">
             <div class="calendar-toolbar">
-              <button id="prevMonthButton" class="icon-button" type="button" aria-label="Previous month">&lt;</button>
+              <div class="calendar-nav">
+                <button id="prevMonthButton" class="icon-button" type="button" aria-label="Previous period">&lt;</button>
+                <button id="todayCalendarButton" class="button subtle" type="button">Today</button>
+                <button id="nextMonthButton" class="icon-button" type="button" aria-label="Next period">&gt;</button>
+              </div>
               <strong id="calendarTitle"></strong>
-              <button id="nextMonthButton" class="icon-button" type="button" aria-label="Next month">&gt;</button>
+              <div class="calendar-subviews" aria-label="Calendar subview">
+                <button class="calendar-subview-button" type="button" data-calendar-subview="day">Day</button>
+                <button class="calendar-subview-button active" type="button" data-calendar-subview="week">Week</button>
+                <button class="calendar-subview-button" type="button" data-calendar-subview="month">Month</button>
+              </div>
             </div>
             <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
           </div>
@@ -214,6 +221,22 @@
           </div>
           <div class="manual-actions">
             <button id="saveManualButton" class="button primary" type="button">Save appointment</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="importSummaryModal" class="import-summary-float hidden" aria-label="Import summary" aria-modal="false" role="dialog">
+        <div class="modal-card import-summary-card" role="document">
+          <div class="modal-header">
+            <div>
+              <h2>Import Summary</h2>
+              <p id="importSummarySubtitle">Appointment import results</p>
+            </div>
+            <button id="closeImportSummaryButton" class="icon-button" type="button" aria-label="Close import summary">Close</button>
+          </div>
+          <div id="importSummaryBody" class="import-summary-body"></div>
+          <div class="modal-actions">
+            <button id="dismissImportSummaryButton" class="button primary" type="button">Close</button>
           </div>
         </div>
       </section>
