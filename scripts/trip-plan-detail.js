@@ -596,7 +596,7 @@
               ${metaRow("Destination", stop.destination || "-")}
               ${metaRow("Appointment", stop.schedule_time || "-")}
               ${metaRow("Load Type", stop.load_type || "-")}
-              ${metaRow("Transit Days", formatNullable(stop.transit_days))}
+              ${metaRow("Legal Transit Days", formatNullable(stop.transit_days))}
               ${metaRow("Buffer", formatBuffer(stop.time_buffer_hours))}
             </dl>
           </article>
@@ -1797,7 +1797,7 @@
       <h2>Stops</h2>
       ${documentTable(
         payload.documentType === "bol"
-          ? ["Stop", "ISA / Ref", "Destination", "Appointment", "Load Type", "Transit Days"]
+          ? ["Stop", "ISA / Ref", "Destination", "Appointment", "Load Type", "Legal Transit Days"]
           : ["Stop", "ISA / Ref", "Destination", "Appointment", "Load Type"],
         payload.stops.map((stop) => payload.documentType === "bol"
           ? [stop.stopNumber, stop.isa, stop.destination, stop.appointmentTime, stop.loadType, formatNullable(stop.transitDays)]

@@ -9,6 +9,9 @@ create table if not exists public.inventory_tickets (
   trip_plan_id uuid references public.trip_plans(id) on delete set null,
   fc text not null,
   inventory_status text not null default 'Draft',
+  record_status text not null default 'Active',
+  geo_status text not null default 'In Warehouse',
+  stage_status text not null default 'Available',
   transport_status text not null default 'Not Started',
   exception_status text not null default 'None',
   weight_kg numeric(12,2) not null default 0,
@@ -39,6 +42,15 @@ alter table public.inventory_tickets
 add column if not exists trip_plan_id uuid references public.trip_plans(id) on delete set null;
 
 alter table public.inventory_tickets
+add column if not exists record_status text not null default 'Active';
+
+alter table public.inventory_tickets
+add column if not exists geo_status text not null default 'In Warehouse';
+
+alter table public.inventory_tickets
+add column if not exists stage_status text not null default 'Available';
+
+alter table public.inventory_tickets
 add column if not exists transport_status text not null default 'Not Started';
 
 alter table public.inventory_tickets
@@ -51,12 +63,72 @@ where inventory_ticket_no is null or inventory_ticket_no = '';
 alter table public.inventory_tickets
 alter column inventory_ticket_no set not null;
 
+update public.inventory_tickets
+set
+  record_status = case inventory_status
+    when 'On Hold' then 'On Hold'
+    when 'Cancelled' then 'Cancelled'
+    else 'Active'
+  end,
+  geo_status = case inventory_status
+    when 'Shipped' then 'Truck In Transit'
+    else 'In Warehouse'
+  end,
+  stage_status = case inventory_status
+    when 'Reserved' then 'Reserved'
+    when 'Planned' then 'Planned'
+    when 'Shipped' then 'In Transit'
+    when 'On Hold' then 'Problem Handling'
+    when 'Cancelled' then 'Problem Handling'
+    else 'Available'
+  end,
+  exception_status = case inventory_status
+    when 'On Hold' then 'At Risk'
+    else coalesce(nullif(exception_status, ''), 'None')
+  end
+where record_status = 'Active'
+  and geo_status = 'In Warehouse'
+  and stage_status = 'Available'
+  and inventory_status in ('Draft', 'Available', 'Reserved', 'Planned', 'Shipped', 'On Hold', 'Cancelled');
+
+update public.inventory_tickets
+set exception_status = 'At Risk'
+where exception_status = 'On Hold';
+
 alter table public.inventory_tickets
 drop constraint if exists inventory_tickets_inventory_status_check;
 
 alter table public.inventory_tickets
 add constraint inventory_tickets_inventory_status_check
 check (inventory_status in ('Draft', 'Available', 'Reserved', 'Planned', 'Shipped', 'On Hold', 'Cancelled'));
+
+alter table public.inventory_tickets
+drop constraint if exists inventory_tickets_record_status_check;
+
+alter table public.inventory_tickets
+add constraint inventory_tickets_record_status_check
+check (record_status in ('Active', 'On Hold', 'Cancelled', 'Closed'));
+
+alter table public.inventory_tickets
+drop constraint if exists inventory_tickets_geo_status_check;
+
+alter table public.inventory_tickets
+add constraint inventory_tickets_geo_status_check
+check (geo_status in ('Ocean In Transit', 'Arrived Port', 'Devanning', 'In Warehouse', 'Truck In Transit', 'Delivered'));
+
+alter table public.inventory_tickets
+drop constraint if exists inventory_tickets_stage_status_check;
+
+alter table public.inventory_tickets
+add constraint inventory_tickets_stage_status_check
+check (
+  (geo_status = 'Ocean In Transit' and stage_status in ('Pending'))
+  or (geo_status = 'Arrived Port' and stage_status in ('Pending'))
+  or (geo_status = 'Devanning' and stage_status in ('Container Pickup', 'Devanning', 'Devanned'))
+  or (geo_status = 'In Warehouse' and stage_status in ('Available', 'Reserved', 'Planned', 'Staging', 'Problem Handling'))
+  or (geo_status = 'Truck In Transit' and stage_status in ('In Transit', 'Delayed', 'Accident', 'Delivered Pending POD'))
+  or (geo_status = 'Delivered' and stage_status in ('Delivered'))
+);
 
 alter table public.inventory_tickets
 drop constraint if exists inventory_tickets_transport_status_check;
@@ -70,7 +142,7 @@ drop constraint if exists inventory_tickets_exception_status_check;
 
 alter table public.inventory_tickets
 add constraint inventory_tickets_exception_status_check
-check (exception_status in ('None', 'At Risk', 'On Hold', 'Damaged', 'Lost', 'Inspection', 'Customs Hold'));
+check (exception_status in ('None', 'At Risk', 'Damaged', 'Lost', 'Inspection', 'Customs Hold', 'Accident', 'Delayed', 'Shortage', 'Overage'));
 
 alter table public.inventory_tickets
 drop constraint if exists inventory_tickets_weight_kg_check;
@@ -107,6 +179,9 @@ create index if not exists inventory_tickets_outbound_task_ref_idx on public.inv
 create index if not exists inventory_tickets_trip_plan_id_idx on public.inventory_tickets (trip_plan_id);
 create index if not exists inventory_tickets_fc_idx on public.inventory_tickets (fc);
 create index if not exists inventory_tickets_status_idx on public.inventory_tickets (inventory_status);
+create index if not exists inventory_tickets_record_status_idx on public.inventory_tickets (record_status);
+create index if not exists inventory_tickets_geo_status_idx on public.inventory_tickets (geo_status);
+create index if not exists inventory_tickets_stage_status_idx on public.inventory_tickets (stage_status);
 create index if not exists inventory_tickets_transport_status_idx on public.inventory_tickets (transport_status);
 create index if not exists inventory_tickets_exception_status_idx on public.inventory_tickets (exception_status);
 create index if not exists inventory_tickets_updated_at_idx on public.inventory_tickets (updated_at);

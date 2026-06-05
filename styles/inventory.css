@@ -7,12 +7,71 @@
 }
 
 .inventory-workspace .table-wrap table {
-  min-width: 1820px;
+  min-width: 1960px;
 }
 
 .inventory-workspace .detail-panel {
   max-height: calc(100vh - 94px);
   overflow: auto;
+}
+
+.inventory-toolbar {
+  align-items: stretch;
+}
+
+.inventory-status-tabs,
+.inventory-stage-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
+.inventory-status-tab,
+.inventory-stage-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.inventory-status-tab {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.inventory-stage-tab {
+  min-height: 32px;
+  padding: 6px 9px;
+}
+
+.inventory-status-tab:hover,
+.inventory-stage-tab:hover {
+  border-color: rgba(20, 104, 216, 0.35);
+  color: var(--accent);
+}
+
+.inventory-status-tab.active,
+.inventory-stage-tab.active {
+  border-color: rgba(20, 104, 216, 0.45);
+  background: rgba(20, 104, 216, 0.1);
+  color: var(--accent);
+}
+
+.inventory-status-tab strong,
+.inventory-stage-tab strong {
+  border-radius: 999px;
+  background: #eef2f7;
+  color: var(--text);
+  padding: 2px 7px;
+  font-size: 11px;
 }
 
 .ticket-detail-link {
@@ -158,29 +217,56 @@
   white-space: nowrap;
 }
 
-.status-draft {
+.status-chip-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.status-draft,
+.status-none,
+.status-pending {
   background: #eef2f7;
   color: #344054;
 }
 
 .status-available,
-.status-shipped {
+.status-shipped,
+.status-active,
+.status-in-warehouse,
+.status-delivered {
   background: #ecfdf3;
   color: var(--ok);
 }
 
 .status-reserved,
-.status-planned {
+.status-planned,
+.status-staging,
+.status-ocean-in-transit,
+.status-arrived-port,
+.status-truck-in-transit,
+.status-in-transit {
   background: rgba(20, 104, 216, 0.1);
   color: var(--accent);
 }
 
-.status-on-hold {
+.status-on-hold,
+.status-at-risk,
+.status-delayed,
+.status-accident,
+.status-customs-hold,
+.status-inspection,
+.status-problem-handling {
   background: rgba(181, 71, 8, 0.12);
   color: var(--warning);
 }
 
-.status-cancelled {
+.status-cancelled,
+.status-closed,
+.status-damaged,
+.status-lost,
+.status-shortage,
+.status-overage {
   background: #f4f4f5;
   color: var(--muted);
 }

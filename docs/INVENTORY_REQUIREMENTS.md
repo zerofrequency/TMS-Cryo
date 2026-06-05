@@ -151,7 +151,10 @@ Display labels:
 
 ```text
 FC
-Status
+Record Status
+Geo Status
+Stage Status
+Exception Status
 Weight (KG)
 CBM
 Cartons
@@ -171,6 +174,10 @@ Recommended database fields:
 ```text
 fc text
 inventory_status text
+record_status text
+geo_status text
+stage_status text
+exception_status text
 weight_kg numeric(12,2)
 volume_cbm numeric(12,3)
 piece_carton integer
@@ -185,77 +192,72 @@ trip_plan_id uuid
 
 Note: the user-provided `column (cbm)` should be implemented as `volume_cbm` and displayed as `CBM`.
 
-## Recommended Statuses
+## Inventory Status Model
 
-Use these MVP inventory statuses for the inventory ticket:
+Inventory uses a multi-dimensional status model. The legacy `inventory_status` field remains temporarily for compatibility, but users should create, edit, filter, display, and export the new fields.
+
+### Record Status
+
+Represents whether the inventory record is active or closed at the record level.
 
 ```text
-Draft
-Available
-Reserved
-Planned
-Shipped
+Active
 On Hold
 Cancelled
+Closed
 ```
 
-Status definitions:
+### Geo Status
 
-- `Draft`: record created but not confirmed.
-- `Available`: inventory is available for planning.
-- `Reserved`: inventory is reserved for an outbound plan but not shipped.
-- `Planned`: inventory is assigned to a Trip Plan or outbound movement.
-- `Shipped`: inventory has left the warehouse.
-- `On Hold`: inventory has an exception or cannot be used.
-- `Cancelled`: inventory record is cancelled and should remain visible for history.
-
-## Additional Ticket Status Fields
-
-Inventory detail should distinguish inventory status from transport and exception status.
-
-Recommended display fields:
+Represents where the goods physically are in the logistics lifecycle.
 
 ```text
-Inventory Status
-Transport Status
-Exception Status
-```
-
-Recommended database fields on `inventory_tickets`:
-
-```text
-inventory_status text
-transport_status text
-exception_status text
-```
-
-MVP transport statuses:
-
-```text
-Not Started
-In Transit
-Arrived
+Ocean In Transit
+Arrived Port
+Devanning
+In Warehouse
+Truck In Transit
 Delivered
 ```
 
-MVP exception statuses:
+### Stage Status
+
+Represents the operational stage within the current `geo_status`.
+
+```text
+Ocean In Transit: Pending
+Arrived Port: Pending
+Devanning: Container Pickup, Devanning, Devanned
+In Warehouse: Available, Reserved, Planned, Staging, Problem Handling
+Truck In Transit: In Transit, Delayed, Accident, Delivered Pending POD
+Delivered: Delivered
+```
+
+### Exception Status
+
+Represents abnormal or risk condition.
 
 ```text
 None
 At Risk
-On Hold
 Damaged
 Lost
 Inspection
 Customs Hold
+Accident
+Delayed
+Shortage
+Overage
 ```
 
-MVP behavior:
+### Legacy Compatibility Fields
 
-- `inventory_status` remains the main inventory workflow status.
-- `transport_status` gives the movement state of the ticket.
-- `exception_status` gives the current exception/hold state.
-- Exception status does not need to implement full blocking logic in MVP, but it should be visible in detail and searchable/filterable when practical.
+```text
+inventory_status text
+transport_status text
+```
+
+These remain for existing records and older code paths during transition. New UI behavior is driven by `record_status`, `geo_status`, `stage_status`, and `exception_status`.
 
 ## Page Requirements
 
@@ -295,11 +297,24 @@ Show:
 
 ### Filters
 
-Support filtering by:
+Use `geo_status` as the primary list page segmentation. Inventory should show top-level Geo Status tabs:
+
+```text
+Ocean In Transit
+Arrived Port
+Devanning
+In Warehouse
+Truck In Transit
+Delivered
+```
+
+Within the active Geo Status page, show only that page's valid Stage Status chips. Support additional filtering by:
 
 - Search text
 - FC
-- Status
+- Record Status
+- Stage Status within the active Geo Status page
+- Exception Status
 
 Search should match:
 
@@ -312,6 +327,10 @@ Search should match:
 - Pallet Ref
 - Linked Trip Plan
 - FC
+- Record Status
+- Geo Status
+- Stage Status
+- Exception Status
 - Remark
 
 ### List View
@@ -325,8 +344,9 @@ Show columns:
 - Pallet Ref
 - Linked Trip Plan
 - FC
-- Status
-- Transport Status
+- Record Status
+- Geo Status
+- Stage Status
 - Exception Status
 - Shipment / PO Count
 - Weight (KG)
@@ -352,8 +372,9 @@ Show:
 - Pallet Ref
 - Linked Trip Plan
 - FC
-- Status
-- Transport Status
+- Record Status
+- Geo Status
+- Stage Status
 - Exception Status
 - Weight (KG)
 - CBM
@@ -379,8 +400,9 @@ Allow users to enter or update:
 - Container Ref
 - Pallet Ref
 - FC
-- Status
-- Transport Status
+- Record Status
+- Geo Status
+- Stage Status
 - Exception Status
 - Weight (KG)
 - CBM
@@ -391,7 +413,8 @@ Validation:
 
 - Inventory Ticket No is required.
 - FC is required.
-- Status is required.
+- Record Status, Geo Status, Stage Status, and Exception Status are required.
+- Stage Status must be valid for the selected Geo Status.
 - Weight cannot be negative.
 - CBM cannot be negative.
 - Cartons cannot be negative.
@@ -416,6 +439,9 @@ pallet_ref text
 trip_plan_id uuid references public.trip_plans(id) on delete set null
 fc text not null
 inventory_status text not null default 'Draft'
+record_status text not null default 'Active'
+geo_status text not null default 'In Warehouse'
+stage_status text not null default 'Available'
 transport_status text not null default 'Not Started'
 exception_status text not null default 'None'
 weight_kg numeric(12,2) default 0
@@ -431,8 +457,11 @@ Recommended constraints:
 
 ```text
 inventory_status in ('Draft', 'Available', 'Reserved', 'Planned', 'Shipped', 'On Hold', 'Cancelled')
+record_status in ('Active', 'On Hold', 'Cancelled', 'Closed')
+geo_status in ('Ocean In Transit', 'Arrived Port', 'Devanning', 'In Warehouse', 'Truck In Transit', 'Delivered')
+stage_status constrained by geo_status
 transport_status in ('Not Started', 'In Transit', 'Arrived', 'Delivered')
-exception_status in ('None', 'At Risk', 'On Hold', 'Damaged', 'Lost', 'Inspection', 'Customs Hold')
+exception_status in ('None', 'At Risk', 'Damaged', 'Lost', 'Inspection', 'Customs Hold', 'Accident', 'Delayed', 'Shortage', 'Overage')
 weight_kg >= 0
 volume_cbm >= 0
 piece_carton >= 0
@@ -475,6 +504,9 @@ inventory_tickets_pallet_ref_idx on pallet_ref
 inventory_tickets_trip_plan_id_idx on trip_plan_id
 inventory_tickets_fc_idx on fc
 inventory_tickets_status_idx on inventory_status
+inventory_tickets_record_status_idx on record_status
+inventory_tickets_geo_status_idx on geo_status
+inventory_tickets_stage_status_idx on stage_status
 inventory_tickets_transport_status_idx on transport_status
 inventory_tickets_exception_status_idx on exception_status
 inventory_tickets_updated_at_idx on updated_at
@@ -508,9 +540,10 @@ Future integration direction:
 - User can create one inventory ticket with required fields.
 - User can edit inventory ticket fields.
 - User can search by Inventory Ticket No, Shipment ID, External Ref No, PO, Product Name, Container Ref, Pallet Ref, linked Trip Plan, FC, and remark.
-- User can filter by FC and status.
+- User can switch Inventory list pages by Geo Status.
+- User can filter within the active Geo Status page by Stage Status, FC, record status, and exception status.
 - Ticket list has a View action that opens ticket detail.
-- Ticket detail shows inventory status, transport status, exception status, and change log.
+- Ticket detail shows record status, geo status, stage status, exception status, and change log.
 - Ticket detail shows linked Trip Plan when `trip_plan_id` exists.
 - Ticket detail shows a PO / Shipment ID list.
 - User can add, edit, and remove Shipment ID / PO pairs under one Inventory Ticket.

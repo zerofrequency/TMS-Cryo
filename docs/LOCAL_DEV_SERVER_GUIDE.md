@@ -34,7 +34,7 @@ From the project root:
 
 ```sh
 cd /Users/cryo/Documents/Codex/TMS/TMS-main
-python3 -m http.server 5173
+npm run dev
 ```
 
 Then open:
@@ -48,7 +48,7 @@ http://127.0.0.1:5173/
 If port `5173` is already in use, use another port:
 
 ```sh
-python3 -m http.server 8080
+npm run dev -- --port 8080
 ```
 
 Then open:

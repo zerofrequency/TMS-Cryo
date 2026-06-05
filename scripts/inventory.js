@@ -4,16 +4,38 @@
   const TABLE = "inventory_tickets";
   const SHIPMENT_TABLE = "inventory_ticket_shipments";
   const TRIP_TABLE = "trip_plans";
-  const STATUSES = ["Draft", "Available", "Reserved", "Planned", "Shipped", "On Hold", "Cancelled"];
+  const LEGACY_STATUSES = ["Draft", "Available", "Reserved", "Planned", "Shipped", "On Hold", "Cancelled"];
+  const RECORD_STATUSES = ["Active", "On Hold", "Cancelled", "Closed"];
+  const GEO_STATUSES = ["Ocean In Transit", "Arrived Port", "Devanning", "In Warehouse", "Truck In Transit", "Delivered"];
+  const STAGE_STATUS_BY_GEO = {
+    "Ocean In Transit": ["Pending"],
+    "Arrived Port": ["Pending"],
+    Devanning: ["Container Pickup", "Devanning", "Devanned"],
+    "In Warehouse": ["Available", "Reserved", "Planned", "Staging", "Problem Handling"],
+    "Truck In Transit": ["In Transit", "Delayed", "Accident", "Delivered Pending POD"],
+    Delivered: ["Delivered"],
+  };
   const TRANSPORT_STATUSES = ["Not Started", "In Transit", "Arrived", "Delivered"];
-  const EXCEPTION_STATUSES = ["None", "At Risk", "On Hold", "Damaged", "Lost", "Inspection", "Customs Hold"];
+  const EXCEPTION_STATUSES = ["None", "At Risk", "Damaged", "Lost", "Inspection", "Customs Hold", "Accident", "Delayed", "Shortage", "Overage"];
+  const LEGACY_STATUS_MIGRATION = {
+    Draft: { recordStatus: "Active", geoStatus: "In Warehouse", stageStatus: "Available", exceptionStatus: "None" },
+    Available: { recordStatus: "Active", geoStatus: "In Warehouse", stageStatus: "Available", exceptionStatus: "None" },
+    Reserved: { recordStatus: "Active", geoStatus: "In Warehouse", stageStatus: "Reserved", exceptionStatus: "None" },
+    Planned: { recordStatus: "Active", geoStatus: "In Warehouse", stageStatus: "Planned", exceptionStatus: "None" },
+    Shipped: { recordStatus: "Active", geoStatus: "Truck In Transit", stageStatus: "In Transit", exceptionStatus: "None" },
+    "On Hold": { recordStatus: "On Hold", geoStatus: "In Warehouse", stageStatus: "Problem Handling", exceptionStatus: "At Risk" },
+    Cancelled: { recordStatus: "Cancelled", geoStatus: "In Warehouse", stageStatus: "Problem Handling", exceptionStatus: "None" },
+  };
 
   const els = {
     newTicketButton: document.getElementById("newTicketButton"),
     exportButton: document.getElementById("exportButton"),
+    geoStatusTabs: document.getElementById("geoStatusTabs"),
+    stageStatusTabs: document.getElementById("stageStatusTabs"),
     searchInput: document.getElementById("searchInput"),
     fcFilter: document.getElementById("fcFilter"),
-    statusFilter: document.getElementById("statusFilter"),
+    recordStatusFilter: document.getElementById("recordStatusFilter"),
+    exceptionStatusFilter: document.getElementById("exceptionStatusFilter"),
     clearFilters: document.getElementById("clearFilters"),
     cloudStatus: document.getElementById("cloudStatus"),
     resultCount: document.getElementById("resultCount"),
@@ -29,8 +51,9 @@
     inventoryTicketNo: document.getElementById("inventoryTicketNo"),
     externalRefNo: document.getElementById("externalRefNo"),
     fc: document.getElementById("fc"),
-    inventoryStatus: document.getElementById("inventoryStatus"),
-    transportStatus: document.getElementById("transportStatus"),
+    recordStatus: document.getElementById("recordStatus"),
+    geoStatus: document.getElementById("geoStatus"),
+    stageStatus: document.getElementById("stageStatus"),
     exceptionStatus: document.getElementById("exceptionStatus"),
     productName: document.getElementById("productName"),
     containerRef: document.getElementById("containerRef"),
@@ -52,6 +75,8 @@
     tripPlans: [],
     selectedId: "",
     editingId: "",
+    activeGeoStatus: "In Warehouse",
+    activeStageStatus: "",
   };
 
   boot();
@@ -72,14 +97,31 @@
   }
 
   function bindEvents() {
-    [els.searchInput, els.fcFilter, els.statusFilter].forEach((element) => {
+    [els.searchInput, els.fcFilter, els.recordStatusFilter, els.exceptionStatusFilter].forEach((element) => {
       element.addEventListener("input", render);
       element.addEventListener("change", render);
     });
+    els.geoStatusTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-geo-status-tab]");
+      if (!button) return;
+      state.activeGeoStatus = button.dataset.geoStatusTab;
+      state.activeStageStatus = "";
+      render();
+    });
+    els.stageStatusTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-stage-status-tab]");
+      if (!button) return;
+      state.activeStageStatus = button.dataset.stageStatusTab;
+      render();
+    });
+    els.geoStatus.addEventListener("change", () => syncStageOptions());
     els.clearFilters.addEventListener("click", () => {
       els.searchInput.value = "";
       els.fcFilter.value = "";
-      els.statusFilter.value = "";
+      els.recordStatusFilter.value = "";
+      els.exceptionStatusFilter.value = "";
+      state.activeGeoStatus = "In Warehouse";
+      state.activeStageStatus = "";
       render();
     });
     els.newTicketButton.addEventListener("click", () => showForm());
@@ -120,10 +162,20 @@
   }
 
   function fillStatusOptions() {
-    els.statusFilter.innerHTML = '<option value="">All statuses</option>' + optionList(STATUSES);
-    els.inventoryStatus.innerHTML = optionList(STATUSES);
-    els.transportStatus.innerHTML = optionList(TRANSPORT_STATUSES);
+    els.recordStatusFilter.innerHTML = '<option value="">All record statuses</option>' + optionList(RECORD_STATUSES);
+    els.exceptionStatusFilter.innerHTML = '<option value="">All exception statuses</option>' + optionList(EXCEPTION_STATUSES);
+    els.recordStatus.innerHTML = optionList(RECORD_STATUSES);
+    els.geoStatus.innerHTML = optionList(GEO_STATUSES);
+    syncStageOptions("Available");
     els.exceptionStatus.innerHTML = optionList(EXCEPTION_STATUSES);
+  }
+
+  function syncStageOptions(selectedStage = "") {
+    const geoStatus = clean(els.geoStatus.value) || "In Warehouse";
+    const options = STAGE_STATUS_BY_GEO[geoStatus] || STAGE_STATUS_BY_GEO["In Warehouse"];
+    const nextStage = options.includes(selectedStage) ? selectedStage : options[0];
+    els.stageStatus.innerHTML = optionList(options);
+    els.stageStatus.value = nextStage;
   }
 
   async function loadTripPlans() {
@@ -172,9 +224,35 @@
   }
 
   function render() {
+    renderStatusTabs();
     const rows = filteredTickets();
+    if (rows.length && !rows.some((ticket) => ticket.id === state.selectedId)) state.selectedId = rows[0].id;
+    if (!rows.length) state.selectedId = "";
     renderRows(rows);
     renderDetail();
+  }
+
+  function renderStatusTabs() {
+    if (!GEO_STATUSES.includes(state.activeGeoStatus)) state.activeGeoStatus = "In Warehouse";
+    const stageOptionsForGeo = stageOptions(state.activeGeoStatus);
+    if (state.activeStageStatus && !stageOptionsForGeo.includes(state.activeStageStatus)) state.activeStageStatus = "";
+    els.geoStatusTabs.innerHTML = GEO_STATUSES.map((status) => {
+      const selected = status === state.activeGeoStatus;
+      return `<button class="inventory-status-tab${selected ? " active" : ""}" type="button" data-geo-status-tab="${escapeAttr(status)}" aria-pressed="${selected ? "true" : "false"}">
+        <span>${escapeHtml(status)}</span>
+        <strong>${ticketsByGeoStatus(status).length}</strong>
+      </button>`;
+    }).join("");
+    els.stageStatusTabs.innerHTML = [
+      `<button class="inventory-stage-tab${state.activeStageStatus ? "" : " active"}" type="button" data-stage-status-tab="" aria-pressed="${state.activeStageStatus ? "false" : "true"}">All stages</button>`,
+      ...stageOptionsForGeo.map((status) => {
+        const selected = status === state.activeStageStatus;
+        return `<button class="inventory-stage-tab${selected ? " active" : ""}" type="button" data-stage-status-tab="${escapeAttr(status)}" aria-pressed="${selected ? "true" : "false"}">
+          ${escapeHtml(status)}
+          <strong>${ticketsByGeoStatus(state.activeGeoStatus).filter((ticket) => ticket.stageStatus === status).length}</strong>
+        </button>`;
+      }),
+    ].join("");
   }
 
   function selectTicket(ticketId, focusDetail) {
@@ -202,8 +280,9 @@
         <td>${escapeHtml(ticket.palletRef || "-")}</td>
         <td>${renderTripPlanLink(ticket)}</td>
         <td>${escapeHtml(ticket.fc)}</td>
-        <td>${statusChip(ticket.status)}</td>
-        <td>${statusChip(ticket.transportStatus)}</td>
+        <td>${statusChip(ticket.recordStatus)}</td>
+        <td>${statusChip(ticket.geoStatus)}</td>
+        <td>${statusChip(ticket.stageStatus)}</td>
         <td>${statusChip(ticket.exceptionStatus)}</td>
         <td>${ticket.shipments.length}</td>
         <td>${escapeHtml(numberText(ticket.weightKg, 2))}</td>
@@ -231,7 +310,7 @@
     els.detailView.innerHTML = `
       <div class="detail-title">
         <div>
-          ${statusChip(ticket.status)}
+          <div class="status-chip-stack">${statusChip(ticket.recordStatus)}${statusChip(ticket.geoStatus)}${statusChip(ticket.stageStatus)}${statusChip(ticket.exceptionStatus)}</div>
           <h2>${escapeHtml(ticket.ticketNo)}</h2>
         </div>
         <button class="button compact neutral" type="button" data-edit-ticket="${escapeAttr(ticket.id)}">Edit</button>
@@ -241,8 +320,9 @@
         ${metaRow("External Ref No", ticket.externalRefNo || "-")}
         ${metaRow("Product Name", ticket.productName || "-")}
         ${metaRow("FC", ticket.fc)}
-        ${metaRow("Inventory Status", ticket.status)}
-        ${metaRow("Transport Status", ticket.transportStatus)}
+        ${metaRow("Record Status", ticket.recordStatus)}
+        ${metaRow("Geo Status", ticket.geoStatus)}
+        ${metaRow("Stage Status", ticket.stageStatus)}
         ${metaRow("Exception Status", ticket.exceptionStatus)}
         ${metaRow("Container Ref", ticket.containerRef || "-")}
         ${metaRow("Pallet Ref", ticket.palletRef || "-")}
@@ -274,10 +354,14 @@
   function filteredTickets() {
     const query = clean(els.searchInput.value).toLowerCase();
     const fc = els.fcFilter.value;
-    const status = els.statusFilter.value;
+    const recordStatus = els.recordStatusFilter.value;
+    const exceptionStatus = els.exceptionStatusFilter.value;
     return state.tickets.filter((ticket) => {
       if (fc && ticket.fc !== fc) return false;
-      if (status && ticket.status !== status) return false;
+      if (recordStatus && ticket.recordStatus !== recordStatus) return false;
+      if (state.activeGeoStatus && ticket.geoStatus !== state.activeGeoStatus) return false;
+      if (state.activeStageStatus && ticket.stageStatus !== state.activeStageStatus) return false;
+      if (exceptionStatus && ticket.exceptionStatus !== exceptionStatus) return false;
       if (!query) return true;
       return searchableText(ticket).includes(query);
     });
@@ -312,8 +396,9 @@
     els.inventoryTicketNo.value = ticket ? ticket.ticketNo : "";
     els.externalRefNo.value = ticket ? ticket.externalRefNo : "";
     els.fc.value = ticket ? ticket.fc : "";
-    els.inventoryStatus.value = ticket ? ticket.status : "Draft";
-    els.transportStatus.value = ticket ? ticket.transportStatus : "Not Started";
+    els.recordStatus.value = ticket ? ticket.recordStatus : "Active";
+    els.geoStatus.value = ticket ? ticket.geoStatus : "In Warehouse";
+    syncStageOptions(ticket ? ticket.stageStatus : "Available");
     els.exceptionStatus.value = ticket ? ticket.exceptionStatus : "None";
     els.productName.value = ticket ? ticket.productName : "";
     els.containerRef.value = ticket ? ticket.containerRef : "";
@@ -411,8 +496,9 @@
       container_ref: clean(els.containerRef.value),
       pallet_ref: clean(els.palletRef.value),
       fc: clean(els.fc.value),
-      inventory_status: clean(els.inventoryStatus.value) || "Draft",
-      transport_status: clean(els.transportStatus.value) || "Not Started",
+      record_status: clean(els.recordStatus.value) || "Active",
+      geo_status: clean(els.geoStatus.value) || "In Warehouse",
+      stage_status: clean(els.stageStatus.value) || "Available",
       exception_status: clean(els.exceptionStatus.value) || "None",
       weight_kg: amountValue(els.weightKg.value),
       volume_cbm: amountValue(els.volumeCbm.value, 3),
@@ -420,6 +506,8 @@
       remark: clean(els.remark.value),
       updated_at: new Date().toISOString(),
     };
+    payload.inventory_status = compatibilityInventoryStatus(payload.record_status, payload.geo_status, payload.stage_status);
+    payload.transport_status = compatibilityTransportStatus(payload.geo_status, payload.stage_status);
     const tripPlanId = clean(els.tripPlanId.value);
     const existingTripPlanId = clean(ticketById(state.editingId)?.tripPlanId);
     if (tripPlanId || existingTripPlanId) payload.trip_plan_id = tripPlanId || null;
@@ -429,8 +517,9 @@
   function validatePayload(payload, shipmentRows) {
     if (!payload.inventory_ticket_no) return { ok: false, message: "Inventory Ticket No is required." };
     if (!payload.fc) return { ok: false, message: "FC is required." };
-    if (!STATUSES.includes(payload.inventory_status)) return { ok: false, message: "Inventory status is required." };
-    if (!TRANSPORT_STATUSES.includes(payload.transport_status)) return { ok: false, message: "Transport status is required." };
+    if (!RECORD_STATUSES.includes(payload.record_status)) return { ok: false, message: "Record status is required." };
+    if (!GEO_STATUSES.includes(payload.geo_status)) return { ok: false, message: "Geo status is required." };
+    if (!stageOptions(payload.geo_status).includes(payload.stage_status)) return { ok: false, message: "Stage status does not match geo status." };
     if (!EXCEPTION_STATUSES.includes(payload.exception_status)) return { ok: false, message: "Exception status is required." };
     if (payload.weight_kg < 0) return { ok: false, message: "Weight cannot be negative." };
     if (payload.volume_cbm < 0) return { ok: false, message: "CBM cannot be negative." };
@@ -443,7 +532,7 @@
     const now = new Date().toISOString();
     const entries = existing && Array.isArray(existing.changeLog) ? [...existing.changeLog] : [];
     if (!existing) {
-      entries.push({ at: now, action: "Inventory ticket created", message: `Inventory ticket ${payload.inventory_ticket_no} created in ${payload.inventory_status}.` });
+      entries.push({ at: now, action: "Inventory ticket created", message: `Inventory ticket ${payload.inventory_ticket_no} created as ${payload.record_status} / ${payload.geo_status} / ${payload.stage_status}.` });
       return entries;
     }
     [
@@ -454,8 +543,9 @@
       ["Pallet Ref", "pallet_ref", existing.palletRef, payload.pallet_ref],
       ["Linked Trip Plan", "trip_plan_id", tripPlanLabel(existing.tripPlanId), tripPlanLabel(payload.trip_plan_id)],
       ["FC", "fc", existing.fc, payload.fc],
-      ["Inventory Status", "inventory_status", existing.status, payload.inventory_status],
-      ["Transport Status", "transport_status", existing.transportStatus, payload.transport_status],
+      ["Record Status", "record_status", existing.recordStatus, payload.record_status],
+      ["Geo Status", "geo_status", existing.geoStatus, payload.geo_status],
+      ["Stage Status", "stage_status", existing.stageStatus, payload.stage_status],
       ["Exception Status", "exception_status", existing.exceptionStatus, payload.exception_status],
       ["Weight (KG)", "weight_kg", existing.weightKg, payload.weight_kg],
       ["CBM", "volume_cbm", existing.volumeCbm, payload.volume_cbm],
@@ -473,11 +563,11 @@
 
   function exportCsv() {
     const rows = filteredTickets();
-    const headers = ["Inventory Ticket No", "External Ref No", "Product Name", "Container Ref", "Pallet Ref", "Linked Trip Plan", "FC", "Inventory Status", "Transport Status", "Exception Status", "Shipment / PO Rows", "Weight (KG)", "CBM", "Cartons", "Remark", "Updated At"];
+    const headers = ["Inventory Ticket No", "External Ref No", "Product Name", "Container Ref", "Pallet Ref", "Linked Trip Plan", "FC", "Record Status", "Geo Status", "Stage Status", "Exception Status", "Legacy Inventory Status", "Transport Status", "Shipment / PO Rows", "Weight (KG)", "CBM", "Cartons", "Remark", "Updated At"];
     const csvRows = [headers, ...rows.map((ticket) => [
       ticket.ticketNo, ticket.externalRefNo, ticket.productName, ticket.containerRef, ticket.palletRef,
       tripPlanLabel(ticket.tripPlanId),
-      ticket.fc, ticket.status, ticket.transportStatus, ticket.exceptionStatus, shipmentPairText(ticket.shipments),
+      ticket.fc, ticket.recordStatus, ticket.geoStatus, ticket.stageStatus, ticket.exceptionStatus, ticket.status, ticket.transportStatus, shipmentPairText(ticket.shipments),
       ticket.weightKg, ticket.volumeCbm, ticket.pieceCarton, ticket.remark, ticket.updatedAt,
     ])].map((row) => row.map(csvCell).join(",")).join("\n");
     const blob = new Blob([csvRows], { type: "text/csv;charset=utf-8" });
@@ -503,13 +593,19 @@
   }
 
   function normalizeTicket(row, shipments) {
+    const legacyStatus = LEGACY_STATUSES.includes(clean(row.inventory_status)) ? clean(row.inventory_status) : "Draft";
+    const migrated = LEGACY_STATUS_MIGRATION[legacyStatus] || LEGACY_STATUS_MIGRATION.Draft;
+    const recordStatus = RECORD_STATUSES.includes(clean(row.record_status)) ? clean(row.record_status) : migrated.recordStatus;
+    const geoStatus = GEO_STATUSES.includes(clean(row.geo_status)) ? clean(row.geo_status) : migrated.geoStatus;
+    const stageStatus = stageOptions(geoStatus).includes(clean(row.stage_status)) ? clean(row.stage_status) : migrated.stageStatus;
+    const exceptionStatus = EXCEPTION_STATUSES.includes(clean(row.exception_status)) ? clean(row.exception_status) : migrated.exceptionStatus;
     return {
       id: clean(row.id), ticketNo: clean(row.inventory_ticket_no), externalRefNo: clean(row.external_ref_no),
       productName: clean(row.product_name), containerRef: clean(row.container_ref), palletRef: clean(row.pallet_ref),
       tripPlanId: clean(row.trip_plan_id), fc: clean(row.fc),
-      status: STATUSES.includes(clean(row.inventory_status)) ? clean(row.inventory_status) : "Draft",
+      status: legacyStatus, recordStatus, geoStatus, stageStatus,
       transportStatus: TRANSPORT_STATUSES.includes(clean(row.transport_status)) ? clean(row.transport_status) : "Not Started",
-      exceptionStatus: EXCEPTION_STATUSES.includes(clean(row.exception_status)) ? clean(row.exception_status) : "None",
+      exceptionStatus,
       weightKg: amountValue(row.weight_kg), volumeCbm: amountValue(row.volume_cbm, 3), pieceCarton: integerValue(row.piece_carton),
       remark: clean(row.remark), changeLog: Array.isArray(row.change_log) ? row.change_log : [], updatedAt: clean(row.updated_at), shipments,
     };
@@ -551,12 +647,13 @@
     return shipmentId && po ? [{ id: "", shipmentId, po }] : [];
   }
 
+  function ticketsByGeoStatus(geoStatus) { return state.tickets.filter((ticket) => ticket.geoStatus === geoStatus); }
   function ticketById(id) { return state.tickets.find((ticket) => ticket.id === id) || null; }
   function isDuplicateTicketNo(ticketNo, currentId) { const value = clean(ticketNo).toLowerCase(); return state.tickets.some((ticket) => ticket.id !== currentId && ticket.ticketNo.toLowerCase() === value); }
   function shipmentPairText(rows) { return rows.map((row) => `${clean(row.shipmentId || row.shipment_id)} / ${clean(row.po)}`).join("; "); }
 
   function searchableText(ticket) {
-    return [ticket.ticketNo, ticket.externalRefNo, ticket.productName, ticket.containerRef, ticket.palletRef, tripPlanLabel(ticket.tripPlanId), ticket.fc, ticket.status, ticket.transportStatus, ticket.exceptionStatus, ticket.remark, shipmentPairText(ticket.shipments)].join(" ").toLowerCase();
+    return [ticket.ticketNo, ticket.externalRefNo, ticket.productName, ticket.containerRef, ticket.palletRef, tripPlanLabel(ticket.tripPlanId), ticket.fc, ticket.recordStatus, ticket.geoStatus, ticket.stageStatus, ticket.status, ticket.transportStatus, ticket.exceptionStatus, ticket.remark, shipmentPairText(ticket.shipments)].join(" ").toLowerCase();
   }
 
   function renderChangeLog(changeLog) {
@@ -567,6 +664,22 @@
   function metaRow(label, value) { return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`; }
   function statusChip(status) { return `<span class="status-chip status-${statusClass(status)}">${escapeHtml(status)}</span>`; }
   function statusClass(status) { return clean(status).toLowerCase().replace(/[^a-z0-9]+/g, "-") || "draft"; }
+  function stageOptions(geoStatus) { return STAGE_STATUS_BY_GEO[clean(geoStatus)] || STAGE_STATUS_BY_GEO["In Warehouse"]; }
+  function compatibilityInventoryStatus(recordStatus, geoStatus, stageStatus) {
+    if (recordStatus === "Cancelled") return "Cancelled";
+    if (recordStatus === "On Hold") return "On Hold";
+    if (geoStatus === "Truck In Transit" || geoStatus === "Delivered") return "Shipped";
+    if (stageStatus === "Reserved") return "Reserved";
+    if (stageStatus === "Planned" || stageStatus === "Staging") return "Planned";
+    if (stageStatus === "Problem Handling" || EXCEPTION_STATUSES.includes(stageStatus)) return "On Hold";
+    return "Available";
+  }
+  function compatibilityTransportStatus(geoStatus, stageStatus) {
+    if (geoStatus === "Delivered" || stageStatus === "Delivered") return "Delivered";
+    if (geoStatus === "Truck In Transit") return "In Transit";
+    if (geoStatus === "Arrived Port" || geoStatus === "Devanning" || geoStatus === "In Warehouse") return "Arrived";
+    return "Not Started";
+  }
   function setCloudStatus(message, type) { els.cloudStatus.textContent = message; els.cloudStatus.classList.toggle("connected-text", type === "connected"); els.cloudStatus.classList.toggle("error-text", type === "error"); }
   function setFormMessage(message, type) { els.formMessage.textContent = message; els.formMessage.classList.toggle("error", type === "error"); }
   function humanizeSaveError(message) { return message.toLowerCase().includes("duplicate") ? "Inventory Ticket No already exists." : message; }

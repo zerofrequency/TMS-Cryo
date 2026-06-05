@@ -9,6 +9,7 @@ map-config.js
 
 # Personal imported/exported data
 data/carrier-appointments.json
+outputs/
 *.csv
 *.xlsx
 *.xls

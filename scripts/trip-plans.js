@@ -191,6 +191,7 @@
     [".stop-schedule", ".stop-transit"].forEach((selector) => {
       node.querySelector(selector).addEventListener("input", updateBuffers);
     });
+    node.querySelector(".stop-destination").addEventListener("input", updateBuffers);
     [".manual-isa", ".stop-destination"].forEach((selector) => {
       node.querySelector(selector).addEventListener("input", updateDefaultPlanName);
     });
@@ -214,7 +215,7 @@
     const fc = state.fcs.get(appt.fc);
     node.querySelector(".stop-destination").value = appt.fc || "";
     node.querySelector(".stop-schedule").value = appt.scheduleTime || "";
-    node.querySelector(".stop-transit").value = fc?.transit_days ?? "";
+    node.querySelector(".stop-transit").value = transitDaysForFc(fc) ?? "";
     updateDefaultPlanName();
   }
 
@@ -437,7 +438,8 @@
       const destination = clean(node.querySelector(".stop-destination").value);
       const scheduleTime = clean(node.querySelector(".stop-schedule").value);
       const transitDays = numberOrNull(node.querySelector(".stop-transit").value);
-      const bufferHours = calculateBufferHours(scheduleTime, transitDays);
+      const legalTransitHours = transitHoursForDestination(destination, transitDays);
+      const bufferHours = calculateBufferHours(scheduleTime, transitDays, legalTransitHours);
       return {
         stop_number: index + 1,
         source,
@@ -446,6 +448,7 @@
         schedule_time: scheduleTime,
         load_type: appointment ? clean(appointment.loadType) : "",
         transit_days: transitDays,
+        legal_transit_hours: legalTransitHours,
         etd_at: etaDateTime().toISOString(),
         time_buffer_hours: bufferHours,
       };
@@ -534,7 +537,8 @@
     els.stopsContainer.querySelectorAll(".stop-card").forEach((node) => {
       const scheduleTime = clean(node.querySelector(".stop-schedule").value);
       const transitDays = numberOrNull(node.querySelector(".stop-transit").value);
-      const buffer = calculateBufferHours(scheduleTime, transitDays);
+      const destination = clean(node.querySelector(".stop-destination").value);
+      const buffer = calculateBufferHours(scheduleTime, transitDays, transitHoursForDestination(destination, transitDays));
       const pill = node.querySelector(".buffer-pill");
       pill.className = "buffer-pill";
       pill.textContent = `Buffer ${formatBuffer(buffer)}`;
@@ -545,10 +549,31 @@
     });
   }
 
-  function calculateBufferHours(scheduleTime, transitDays) {
+  function calculateBufferHours(scheduleTime, transitDays, legalTransitHours = null) {
     const scheduleDate = parseCarrierTime(scheduleTime);
-    if (!scheduleDate || transitDays === null) return null;
-    return (scheduleDate.getTime() - etaDateTime().getTime()) / 3600000 - transitDays * 24;
+    if (!scheduleDate) return null;
+    if (legalTransitHours === null && transitDays === null) return null;
+    const transitHours = legalTransitHours !== null ? legalTransitHours : transitDays * 24;
+    return (scheduleDate.getTime() - etaDateTime().getTime()) / 3600000 - transitHours;
+  }
+
+  function transitDaysForFc(fc) {
+    const legalHours = legalTransitHoursForFc(fc);
+    if (legalHours !== null) return roundNumber(legalHours / 24, 2);
+    const transitDays = numberOrNull(fc && fc.transit_days);
+    return transitDays;
+  }
+
+  function transitHoursForDestination(destination, fallbackTransitDays) {
+    const fc = state.fcs.get(clean(destination));
+    const legalHours = legalTransitHoursForFc(fc);
+    if (legalHours !== null) return legalHours;
+    return fallbackTransitDays === null ? null : fallbackTransitDays * 24;
+  }
+
+  function legalTransitHoursForFc(fc) {
+    const legalHours = numberOrNull(fc && fc.legal_transit_hours);
+    return legalHours !== null ? legalHours : null;
   }
 
   function etaDateTime() {
@@ -664,6 +689,12 @@
     node.querySelector(".stop-destination").value = clean(stop.destination);
     node.querySelector(".stop-schedule").value = clean(stop.schedule_time);
     node.querySelector(".stop-transit").value = stop.transit_days ?? "";
+    if (source === "appointment") {
+      const appt = appointmentByIsa(stop.isa);
+      const fc = state.fcs.get(clean(appt && appt.fc) || clean(stop.destination));
+      const transitDays = transitDaysForFc(fc);
+      if (transitDays !== null && transitDays !== undefined) node.querySelector(".stop-transit").value = transitDays;
+    }
   }
 
   function currentEditingPlan() {
@@ -968,6 +999,11 @@
   function numberOrNull(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function roundNumber(value, decimals = 2) {
+    const factor = 10 ** decimals;
+    return Math.round(Number(value) * factor) / factor;
   }
 
   function compactUnique(values) {

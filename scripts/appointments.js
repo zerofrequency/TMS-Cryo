@@ -3,6 +3,12 @@ const DB_VERSION = 1;
 const RECORD_STORE = "appointments";
 const SUPABASE_TABLE = "appointments";
 const TRIP_TABLE = "trip_plans";
+const FC_TABLE = "fba_fcs";
+const FC_ROUTE_CACHE_TABLE = "fba_fc_route_cache";
+const MAPBOX_DAILY_LIMIT = 1000;
+const MAPBOX_USAGE_STORAGE_KEY = "tms-mapbox-map-load-usage";
+const SOUTHERN_CALIFORNIA_CAMERA = { center: [-117.66, 34.02], zoom: 8.4, pitch: 52, bearing: -18 };
+const CONTINENTAL_US_CAMERA = { center: [-98.5795, 39.8283], zoom: 3.25, pitch: 0, bearing: 0 };
 
 const state = {
   records: [],
@@ -17,6 +23,7 @@ const state = {
   timelineAutoScrollPending: false,
   calendarDate: startOfDay(new Date()),
   calendarSubview: "week",
+  timeDisplayMode: "appointment",
   sortKey: "scheduleTime",
   sortDirection: "asc",
   filters: {
@@ -28,6 +35,15 @@ const state = {
     to: "",
   },
   tripPlansByIsa: new Map(),
+  fcsByCode: new Map(),
+  map: {
+    instance: null,
+    initialized: false,
+    initializing: false,
+    markers: new Map(),
+    selectedFc: "",
+    providerError: "",
+  },
 };
 
 const TRIP_PLAN_EXECUTION_STATUSES = ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"];
@@ -71,16 +87,30 @@ const els = {
   tableViewButton: document.getElementById("tableViewButton"),
   calendarViewButton: document.getElementById("calendarViewButton"),
   timelineViewButton: document.getElementById("timelineViewButton"),
+  mapViewButton: document.getElementById("mapViewButton"),
+  appointmentTimeViewButton: document.getElementById("appointmentTimeViewButton"),
+  latestDepartureViewButton: document.getElementById("latestDepartureViewButton"),
+  soloSafeTransitViewButton: document.getElementById("soloSafeTransitViewButton"),
   tableView: document.getElementById("tableView"),
   calendarView: document.getElementById("calendarView"),
   timelineView: document.getElementById("timelineView"),
+  mapView: document.getElementById("mapView"),
+  mapResultCount: document.getElementById("mapResultCount"),
+  mapSouthernCaliforniaButton: document.getElementById("mapSouthernCaliforniaButton"),
+  mapProviderMessage: document.getElementById("mapProviderMessage"),
+  appointmentMapCanvas: document.getElementById("appointmentMapCanvas"),
+  mapSelectedSummary: document.getElementById("mapSelectedSummary"),
+  mapMissingCoordinates: document.getElementById("mapMissingCoordinates"),
   prevMonthButton: document.getElementById("prevMonthButton"),
   nextMonthButton: document.getElementById("nextMonthButton"),
   todayCalendarButton: document.getElementById("todayCalendarButton"),
+  exportWeekImageButton: document.getElementById("exportWeekImageButton"),
   calendarTitle: document.getElementById("calendarTitle"),
   calendarGrid: document.getElementById("calendarGrid"),
   calendarSubviewButtons: document.querySelectorAll("[data-calendar-subview]"),
   appointmentRows: document.getElementById("appointmentRows"),
+  scheduleColumnHeader: document.getElementById("scheduleColumnHeader"),
+  laTimeColumnHeader: document.getElementById("laTimeColumnHeader"),
   emptyState: document.getElementById("emptyState"),
   detailEmpty: document.getElementById("detailEmpty"),
   detailForm: document.getElementById("detailForm"),
@@ -153,9 +183,15 @@ function bindEvents() {
   els.tableViewButton.addEventListener("click", () => setViewMode("table"));
   els.calendarViewButton.addEventListener("click", () => setViewMode("calendar"));
   els.timelineViewButton.addEventListener("click", () => setViewMode("timeline"));
+  els.mapViewButton.addEventListener("click", () => setViewMode("map"));
+  els.mapSouthernCaliforniaButton.addEventListener("click", flyMapToSouthernCalifornia);
+  els.appointmentTimeViewButton.addEventListener("click", () => setTimeDisplayMode("appointment"));
+  els.latestDepartureViewButton.addEventListener("click", () => setTimeDisplayMode("latestDeparture"));
+  els.soloSafeTransitViewButton.addEventListener("click", () => setTimeDisplayMode("soloSafeTransit"));
   els.prevMonthButton.addEventListener("click", () => shiftCalendarPeriod(-1));
   els.nextMonthButton.addEventListener("click", () => shiftCalendarPeriod(1));
   els.todayCalendarButton.addEventListener("click", () => jumpCalendarToToday());
+  els.exportWeekImageButton.addEventListener("click", exportWeekImage);
   els.calendarSubviewButtons.forEach((button) => {
     button.addEventListener("click", () => setCalendarSubview(button.dataset.calendarSubview));
   });
@@ -195,8 +231,14 @@ function bindEvents() {
 async function loadRecords() {
   if (state.supabase.enabled) {
     try {
-      state.records = await loadRecordsFromSupabase();
-      state.tripPlansByIsa = await loadTripPlansByIsa();
+      const [records, tripPlansByIsa, fcsByCode] = await Promise.all([
+        loadRecordsFromSupabase(),
+        loadTripPlansByIsa(),
+        loadFcsByCode(),
+      ]);
+      state.records = records;
+      state.tripPlansByIsa = tripPlansByIsa;
+      state.fcsByCode = fcsByCode;
       await saveRecordsToDb(state.records);
       setImportStatus("Loaded from Supabase. Changes are synced to cloud.");
       updateCloudStatus("Connected");
@@ -353,6 +395,21 @@ async function loadTripPlansByIsa() {
     });
   });
   return byIsa;
+}
+
+async function loadFcsByCode() {
+  const fcRows = await supabaseTableRequest(FC_TABLE, "?select=fc,address,city,state,latitude,longitude,legal_transit_hours,transit_days", { method: "GET" });
+  let routeRows = [];
+  try {
+    routeRows = await supabaseTableRequest(FC_ROUTE_CACHE_TABLE, "?select=fc,distance_miles", { method: "GET" });
+  } catch (error) {
+    console.warn("Route cache distance load failed.", error);
+  }
+  const distanceByFc = new Map((routeRows || []).map((row) => [clean(row.fc), numberOrNull(row.distance_miles)]));
+  return new Map((fcRows || []).map((row) => {
+    const fc = clean(row.fc);
+    return [fc, { ...row, distance_miles: distanceByFc.get(fc) }];
+  }));
 }
 
 async function upsertRecordsToSupabase(records) {
@@ -735,8 +792,17 @@ function clearFilters() {
 }
 
 function setViewMode(mode) {
+  if (!["table", "calendar", "timeline", "map"].includes(mode)) return;
   state.viewMode = mode;
   if (mode === "timeline") state.timelineAutoScrollPending = true;
+  render();
+}
+
+function setTimeDisplayMode(mode) {
+  if (!["appointment", "latestDeparture", "soloSafeTransit"].includes(mode)) return;
+  state.timeDisplayMode = mode;
+  state.sortKey = "scheduleTime";
+  state.sortDirection = "asc";
   render();
 }
 
@@ -782,7 +848,7 @@ function getFilteredRecords() {
       record.trailer,
       record.notes,
     ].join(" ").toLowerCase();
-    const scheduleDate = parseAppointmentDate(record.scheduleTime);
+    const scheduleDate = filterDateForRecord(record);
 
     return (!search || haystack.includes(search))
       && (!state.filters.fc || record.fc === state.filters.fc)
@@ -798,13 +864,13 @@ function compareRecords(a, b) {
   let left = a[state.sortKey] || "";
   let right = b[state.sortKey] || "";
   if (state.sortKey === "scheduleTime" || state.sortKey === "crdd") {
-    left = parseAppointmentDate(left)?.getTime() || 0;
-    right = parseAppointmentDate(right)?.getTime() || 0;
+    left = (state.sortKey === "scheduleTime" ? displayDateForRecord(a) : parseAppointmentDate(left))?.getTime() || 0;
+    right = (state.sortKey === "scheduleTime" ? displayDateForRecord(b) : parseAppointmentDate(right))?.getTime() || 0;
     return (left - right) * direction;
   }
   if (state.sortKey === "laTime") {
-    left = parseAppointmentDate(a.scheduleTime)?.getTime() || 0;
-    right = parseAppointmentDate(b.scheduleTime)?.getTime() || 0;
+    left = displayDateForRecord(a)?.getTime() || 0;
+    right = displayDateForRecord(b)?.getTime() || 0;
     return (left - right) * direction;
   }
   return String(left).localeCompare(String(right), undefined, { numeric: true }) * direction;
@@ -826,6 +892,117 @@ function parseAppointmentDate(value) {
   return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
 }
 
+function fcForRecord(record) {
+  return state.fcsByCode.get(clean(record && record.fc));
+}
+
+function legalTransitHoursForRecord(record) {
+  const fc = fcForRecord(record);
+  const legalHours = numberOrNull(fc && fc.legal_transit_hours);
+  if (legalHours !== null) return legalHours;
+  const transitDays = numberOrNull(fc && fc.transit_days);
+  return transitDays === null ? null : transitDays * 24;
+}
+
+function routeDistanceMilesForRecord(record) {
+  const fc = fcForRecord(record);
+  return numberOrNull(fc && fc.distance_miles);
+}
+
+function soloSafeTransitBufferPercent(record) {
+  const miles = routeDistanceMilesForRecord(record);
+  if (miles === null) return null;
+  if (miles < 500) return 0.10;
+  if (miles <= 1500) return 0.15;
+  return 0.25;
+}
+
+function soloSafeTransitHoursForRecord(record) {
+  const legalHours = legalTransitHoursForRecord(record);
+  const bufferPercent = soloSafeTransitBufferPercent(record);
+  if (legalHours === null || bufferPercent === null) return null;
+  return legalHours * (1 + bufferPercent);
+}
+
+function departureDateFromTransitHours(record, transitHours) {
+  const appointmentDate = parseAppointmentDate(record && record.scheduleTime);
+  if (!appointmentDate || transitHours === null) return null;
+  return new Date(appointmentDate.getTime() - transitHours * 3600000);
+}
+
+function latestDepartureDate(record) {
+  return departureDateFromTransitHours(record, legalTransitHoursForRecord(record));
+}
+
+function soloSafeDepartureDate(record) {
+  return departureDateFromTransitHours(record, soloSafeTransitHoursForRecord(record));
+}
+
+function displayDateForRecord(record) {
+  if (state.timeDisplayMode === "latestDeparture") return latestDepartureDate(record);
+  if (state.timeDisplayMode === "soloSafeTransit") return soloSafeDepartureDate(record);
+  return parseAppointmentDate(record && record.scheduleTime);
+}
+
+function filterDateForRecord(record) {
+  return displayDateForRecord(record);
+}
+
+function displayTimeText(record) {
+  if (state.timeDisplayMode === "appointment") return clean(record.scheduleTime) || "-";
+  const date = displayDateForRecord(record);
+  if (!date) return state.timeDisplayMode === "soloSafeTransit" ? "No safe time" : "No legal time";
+  return formatDateTimeWithZone(date);
+}
+
+function displayLosAngelesTime(record) {
+  const date = displayDateForRecord(record);
+  if (!date) return "-";
+  return formatLosAngelesDate(date);
+}
+
+function secondaryTimeText(record) {
+  if (state.timeDisplayMode === "latestDeparture") {
+    return `Appt ${formatLosAngelesTime(record.scheduleTime)}`;
+  }
+  if (state.timeDisplayMode === "soloSafeTransit") {
+    const safeHours = soloSafeTransitHoursForRecord(record);
+    const bufferPercent = soloSafeTransitBufferPercent(record);
+    if (safeHours === null || bufferPercent === null) return `Appt ${formatLosAngelesTime(record.scheduleTime)}`;
+    return `Safe ${formatHours(safeHours)} (+${Math.round(bufferPercent * 100)}%)`;
+  }
+  const latest = latestDepartureDate(record);
+  return latest ? `Latest ${formatLosAngelesDate(latest)}` : "";
+}
+
+function displayDateKey(record) {
+  const date = displayDateForRecord(record);
+  if (date) return dateKey(date);
+  return state.timeDisplayMode === "appointment" ? scheduleDateKey(record && record.scheduleTime) : "";
+}
+
+function displayHourForRecord(record) {
+  const date = displayDateForRecord(record);
+  return date ? date.getHours() : "all";
+}
+
+function displayCalendarTimeLabel(record) {
+  const date = displayDateForRecord(record);
+  if (!date) return state.timeDisplayMode === "appointment" ? calendarTimeLabel(record.scheduleTime) : "No departure";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "America/Los_Angeles",
+  }).format(date);
+}
+
+function currentTimeModeLabel() {
+  if (state.timeDisplayMode === "latestDeparture") return "latest departure";
+  if (state.timeDisplayMode === "soloSafeTransit") return "solo safe transit";
+  return "appointment";
+}
+
 const timezoneOffsets = {
   PST: -480,
   PDT: -420,
@@ -844,6 +1021,7 @@ function render() {
   renderViewMode();
   renderCalendar();
   renderTimeline();
+  renderMapView();
   renderDetail();
 }
 
@@ -881,8 +1059,13 @@ function uniqueValues(field) {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 }
 
+function compactUnique(values) {
+  return [...new Set(values.map(clean).filter(Boolean))];
+}
+
 function renderRows() {
   const records = getFilteredRecords();
+  renderTimeDisplayMode();
   els.resultCount.textContent = `${records.length} visible of ${state.records.length} records`;
   if (!state.records.length) {
     els.emptyState.innerHTML = `
@@ -916,8 +1099,11 @@ function renderRows() {
         </td>
         <td><strong>${escapeHtml(record.fc || "-")}</strong></td>
         <td><span class="status-pill ${statusClass(record.status)}">${escapeHtml(record.status || "Unknown")}</span></td>
-        <td>${escapeHtml(record.scheduleTime || "-")}</td>
-        <td>${escapeHtml(formatLosAngelesTime(record.scheduleTime))}</td>
+        <td>
+          <span class="time-primary">${escapeHtml(displayTimeText(record))}</span>
+          ${secondaryTimeText(record) ? `<small class="time-secondary">${escapeHtml(secondaryTimeText(record))}</small>` : ""}
+        </td>
+        <td>${escapeHtml(displayLosAngelesTime(record))}</td>
         <td>${escapeHtml(record.crdd || "-")}</td>
         <td>
           <select class="load-type-select load-type-${escapeAttr(loadTypeMeta.className)}" data-load-type-key="${escapeAttr(record.key)}" aria-label="Load type for ${escapeAttr(record.appointmentId || record.referenceCode || record.fc || "appointment")}">
@@ -949,16 +1135,32 @@ function renderRows() {
 function renderViewMode() {
   const isCalendar = state.viewMode === "calendar";
   const isTimeline = state.viewMode === "timeline";
-  els.tableView.classList.toggle("hidden", isCalendar || isTimeline);
+  const isMap = state.viewMode === "map";
+  els.tableView.classList.toggle("hidden", isCalendar || isTimeline || isMap);
   els.calendarView.classList.toggle("hidden", !isCalendar);
   els.timelineView.classList.toggle("hidden", !isTimeline);
-  els.tableViewButton.classList.toggle("active", !isCalendar && !isTimeline);
+  els.mapView.classList.toggle("hidden", !isMap);
+  els.tableViewButton.classList.toggle("active", !isCalendar && !isTimeline && !isMap);
   els.calendarViewButton.classList.toggle("active", isCalendar);
   els.timelineViewButton.classList.toggle("active", isTimeline);
+  els.mapViewButton.classList.toggle("active", isMap);
+}
+
+function renderTimeDisplayMode() {
+  const latestMode = state.timeDisplayMode === "latestDeparture";
+  const soloSafeMode = state.timeDisplayMode === "soloSafeTransit";
+  els.appointmentTimeViewButton.classList.toggle("active", state.timeDisplayMode === "appointment");
+  els.latestDepartureViewButton.classList.toggle("active", latestMode);
+  els.soloSafeTransitViewButton.classList.toggle("active", soloSafeMode);
+  els.scheduleColumnHeader.textContent = soloSafeMode ? "Solo Safe Departure" : latestMode ? "Latest Departure" : "Schedule Time";
+  els.laTimeColumnHeader.textContent = latestMode || soloSafeMode ? "LA Departure" : "Los Angeles Time";
 }
 
 function renderCalendar() {
   const records = getFilteredRecords();
+  const isWeekSubview = state.calendarSubview === "week";
+  els.exportWeekImageButton.classList.toggle("hidden", !isWeekSubview);
+  els.exportWeekImageButton.disabled = !isWeekSubview;
   els.calendarSubviewButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.calendarSubview === state.calendarSubview);
   });
@@ -979,15 +1181,14 @@ function renderMonthCalendar(records) {
   const recordsByDay = new Map();
 
   records.forEach((record) => {
-    const date = parseAppointmentDate(record.scheduleTime);
-    if (!date) return;
-    const key = scheduleDateKey(record.scheduleTime) || dateKey(date);
+    const key = displayDateKey(record);
+    if (!key) return;
     const items = recordsByDay.get(key) || [];
     items.push(record);
     recordsByDay.set(key, items);
   });
 
-  els.calendarTitle.textContent = formatCalendarTitle(monthStart, monthEnd);
+  els.calendarTitle.textContent = `${formatCalendarTitle(monthStart, monthEnd)} · ${currentTimeModeLabel()}`;
 
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     .map((day) => `<div class="calendar-weekday">${day}</div>`)
@@ -1003,14 +1204,15 @@ function renderMonthCalendar(records) {
     const items = appointments.map((record) => {
       const selected = record.key === state.selectedKey ? " selected" : "";
       const loadTypeMeta = getLoadTypeMeta(record.loadType);
+      const appointmentClass = ` appt-status-${escapeAttr(appointmentStatusClass(record.status))}`;
       const matchedPlan = tripPlanForRecord(record);
       const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
       const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
       return `
-        <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+        <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${appointmentClass}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
           <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
           <small>
-            <span>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</span>
+            <span>${escapeHtml(displayCalendarTimeLabel(record))}</span>
             <em>${escapeHtml(calendarTypeLabel(record))}</em>
           </small>
         </button>
@@ -1041,7 +1243,7 @@ function renderCalendarTimeGrid(records) {
   const days = Array.from({ length: dayCount }, (_, index) => addDays(rangeStart, index));
   const recordsByDay = recordsByDateKey(records);
 
-  els.calendarTitle.textContent = formatCalendarTitle(rangeStart, rangeEnd);
+  els.calendarTitle.textContent = `${formatCalendarTitle(rangeStart, rangeEnd)} · ${currentTimeModeLabel()}`;
 
   const dayHeaders = days.map((day) => {
     const key = dateKey(day);
@@ -1056,14 +1258,14 @@ function renderCalendarTimeGrid(records) {
   }).join("");
 
   const allDayItems = days.map((day) => {
-    const appointments = (recordsByDay.get(dateKey(day)) || []).filter((record) => !parseAppointmentDate(record.scheduleTime));
+    const appointments = (recordsByDay.get(dateKey(day)) || []).filter((record) => !displayDateForRecord(record));
     return `<div class="calendar-all-day-cell">${appointments.map(renderCalendarPill).join("")}</div>`;
   }).join("");
 
   const hourRows = Array.from({ length: 24 }, (_, hour) => {
     const cells = days.map((day) => {
       const appointments = (recordsByDay.get(dateKey(day)) || []).filter((record) => {
-        const date = parseAppointmentDate(record.scheduleTime);
+        const date = displayDateForRecord(record);
         return date && date.getHours() === hour && (date.getHours() !== 0 || date.getMinutes() !== 0);
       });
       return `<div class="calendar-hour-cell">${appointments.map(renderCalendarTimeItem).join("")}</div>`;
@@ -1089,9 +1291,8 @@ function renderCalendarTimeGrid(records) {
 function recordsByDateKey(records) {
   const groups = new Map();
   records.forEach((record) => {
-    const date = parseAppointmentDate(record.scheduleTime);
-    if (!date) return;
-    const key = scheduleDateKey(record.scheduleTime) || dateKey(date);
+    const key = displayDateKey(record);
+    if (!key) return;
     const items = groups.get(key) || [];
     items.push(record);
     groups.set(key, items.sort(compareRecords));
@@ -1102,11 +1303,12 @@ function recordsByDateKey(records) {
 function renderCalendarPill(record) {
   const selected = record.key === state.selectedKey ? " selected" : "";
   const loadTypeMeta = getLoadTypeMeta(record.loadType);
+  const appointmentClass = ` appt-status-${escapeAttr(appointmentStatusClass(record.status))}`;
   const matchedPlan = tripPlanForRecord(record);
   const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
   const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
   return `
-    <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+    <button class="calendar-appointment load-type-${escapeAttr(loadTypeMeta.className)}${appointmentClass}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
       <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
     </button>
   `;
@@ -1115,12 +1317,13 @@ function renderCalendarPill(record) {
 function renderCalendarTimeItem(record) {
   const selected = record.key === state.selectedKey ? " selected" : "";
   const loadTypeMeta = getLoadTypeMeta(record.loadType);
+  const appointmentClass = ` appt-status-${escapeAttr(appointmentStatusClass(record.status))}`;
   const matchedPlan = tripPlanForRecord(record);
   const tripClass = matchedPlan ? ` trip-bound status-${escapeAttr(tripPlanStatusClass(matchedPlan.status))}` : "";
   const title = `${record.fc || "-"} ${record.appointmentId || record.referenceCode || "-"}`;
   return `
-    <button class="calendar-time-appointment load-type-${escapeAttr(loadTypeMeta.className)}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
-      <span>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</span>
+    <button class="calendar-time-appointment load-type-${escapeAttr(loadTypeMeta.className)}${appointmentClass}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}" title="${escapeAttr(title)}">
+      <span>${escapeHtml(displayCalendarTimeLabel(record))}</span>
       <strong>${escapeHtml(calendarPrimaryLabel(record))}</strong>
     </button>
   `;
@@ -1161,20 +1364,244 @@ function formatCalendarTitle(start, end) {
   return `${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(start)} - ${new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(end)}`;
 }
 
+async function exportWeekImage() {
+  if (state.calendarSubview !== "week") return;
+  els.exportWeekImageButton.disabled = true;
+  const originalText = els.exportWeekImageButton.textContent;
+  els.exportWeekImageButton.textContent = "Exporting...";
+
+  try {
+    const weekStart = startOfWeek(state.calendarDate);
+    const canvas = drawWeekCalendarImage(weekStart, getFilteredRecords());
+    downloadDataUrl(canvas.toDataURL("image/png"), `appointments-week-${dateKey(weekStart)}.png`);
+    setImportStatus("Week calendar image exported.");
+  } catch (error) {
+    console.error(error);
+    setImportStatus(`Week image export failed: ${error.message}`);
+  } finally {
+    els.exportWeekImageButton.textContent = originalText;
+    els.exportWeekImageButton.disabled = state.calendarSubview !== "week";
+  }
+}
+
+function drawWeekCalendarImage(weekStart, records) {
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const dayKeys = days.map(dateKey);
+  const left = 82;
+  const dayWidth = 184;
+  const rowHeight = 56;
+  const titleHeight = 52;
+  const headerHeight = 62;
+  const allDayHeight = 38;
+  const padding = 22;
+  const width = left + dayWidth * 7 + padding * 2;
+  const height = titleHeight + headerHeight + allDayHeight + rowHeight * 24 + padding * 2;
+  const scale = Math.max(2, Math.ceil(window.devicePixelRatio || 1));
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const context = canvas.getContext("2d");
+  context.scale(scale, scale);
+  context.fillStyle = "#f6f7f9";
+  context.fillRect(0, 0, width, height);
+
+  const gridX = padding + left;
+  const gridY = padding + titleHeight;
+  const hourStartY = gridY + headerHeight + allDayHeight;
+  context.fillStyle = "#18202a";
+  context.font = "800 24px Inter, system-ui, sans-serif";
+  context.fillText(`${currentTimeModeLabel()} - ${formatCalendarTitle(weekStart, addDays(weekStart, 6))}`, padding, padding + 30);
+
+  context.fillStyle = "#fbfcfd";
+  context.fillRect(padding, gridY, left + dayWidth * 7, headerHeight + allDayHeight);
+  context.strokeStyle = "#d9dee7";
+  context.lineWidth = 1;
+  context.strokeRect(padding, gridY, left + dayWidth * 7, headerHeight + allDayHeight + rowHeight * 24);
+
+  days.forEach((day, index) => {
+    const x = gridX + index * dayWidth;
+    const isToday = dateKey(day) === dateKey(new Date());
+    context.strokeStyle = "#d9dee7";
+    context.beginPath();
+    context.moveTo(x, gridY);
+    context.lineTo(x, hourStartY + rowHeight * 24);
+    context.stroke();
+    context.fillStyle = "#697382";
+    context.font = "800 12px Inter, system-ui, sans-serif";
+    context.textAlign = "center";
+    context.fillText(new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(day).toUpperCase(), x + dayWidth / 2, gridY + 22);
+    if (isToday) {
+      context.fillStyle = "#1468d8";
+      drawRoundRect(context, x + dayWidth / 2 - 15, gridY + 30, 30, 30, 15);
+      context.fill();
+      context.fillStyle = "#ffffff";
+    } else {
+      context.fillStyle = "#18202a";
+    }
+    context.font = "800 16px Inter, system-ui, sans-serif";
+    context.fillText(String(day.getDate()), x + dayWidth / 2, gridY + 50);
+  });
+  context.textAlign = "left";
+
+  context.fillStyle = "#697382";
+  context.font = "800 11px Inter, system-ui, sans-serif";
+  context.textAlign = "right";
+  context.fillText("All day", padding + left - 8, gridY + headerHeight + 24);
+
+  for (let hour = 0; hour < 24; hour += 1) {
+    const y = hourStartY + hour * rowHeight;
+    context.strokeStyle = "#d9dee7";
+    context.beginPath();
+    context.moveTo(padding, y);
+    context.lineTo(padding + left + dayWidth * 7, y);
+    context.stroke();
+    context.fillStyle = "#697382";
+    context.font = "800 11px Inter, system-ui, sans-serif";
+    context.textAlign = "right";
+    context.fillText(`${pad2(hour)}:00`, padding + left - 8, y + 16);
+  }
+  context.textAlign = "left";
+
+  const weekRecords = records.filter((record) => {
+    const key = displayDateKey(record);
+    return dayKeys.includes(key);
+  });
+  const groups = new Map();
+  weekRecords.forEach((record) => {
+    const key = displayDateKey(record);
+    const hour = displayHourForRecord(record);
+    const groupKey = `${key}|${hour}`;
+    const items = groups.get(groupKey) || [];
+    items.push(record);
+    groups.set(groupKey, items);
+  });
+
+  dayKeys.forEach((key, dayIndex) => {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const items = groups.get(`${key}|${hour}`) || [];
+      items.slice(0, 5).forEach((record, itemIndex) => {
+        const x = gridX + dayIndex * dayWidth + 5;
+        const y = hourStartY + hour * rowHeight + 5 + itemIndex * 16;
+        drawWeekExportCard(context, record, x, y, dayWidth - 10, 15);
+      });
+      if (items.length > 5) {
+        context.fillStyle = "#697382";
+        context.font = "800 10px Inter, system-ui, sans-serif";
+        context.fillText(`+${items.length - 3} more`, gridX + dayIndex * dayWidth + 8, hourStartY + hour * rowHeight + 53);
+      }
+    }
+    const allDayItems = groups.get(`${key}|all`) || [];
+    allDayItems.slice(0, 2).forEach((record, itemIndex) => {
+      const x = gridX + dayIndex * dayWidth + 5;
+      const y = gridY + headerHeight + 5 + itemIndex * 16;
+      drawWeekExportCard(context, record, x, y, dayWidth - 10, 15);
+    });
+  });
+
+  context.strokeStyle = "#d9dee7";
+  context.beginPath();
+  context.moveTo(padding, hourStartY + rowHeight * 24);
+  context.lineTo(padding + left + dayWidth * 7, hourStartY + rowHeight * 24);
+  context.stroke();
+  return canvas;
+}
+
+function drawWeekExportCard(context, record, x, y, width, height) {
+  const tripPlan = tripPlanForRecord(record);
+  const colors = weekExportCardColors(record, tripPlan);
+  context.fillStyle = colors.background;
+  context.strokeStyle = colors.border;
+  drawRoundRect(context, x, y, width, height, 5);
+  context.fill();
+  context.stroke();
+  context.fillStyle = colors.status;
+  drawRoundRect(context, x, y, 5, height, 4);
+  context.fill();
+  context.fillStyle = colors.text;
+  context.font = "800 10px Inter, system-ui, sans-serif";
+  drawTextEllipsis(context, `${displayCalendarTimeLabel(record)} ${calendarPrimaryLabel(record)}`, x + 8, y + 11, width - 12);
+}
+
+function weekExportCardColors(record, tripPlan) {
+  const statusColors = {
+    normal: "#7ddf9a",
+    pending: "#ffbd73",
+    done: "#9aa4b2",
+    issue: "#f97066",
+  };
+  const base = {
+    background: "#eef5ff",
+    border: "#c7d7ef",
+    text: "#163b69",
+    status: statusColors[appointmentStatusClass(record.status)] || statusColors.normal,
+  };
+  if (!tripPlan) return base;
+  const tripStatus = tripPlanStatusClass(tripPlan.status);
+  const tripColors = {
+    planned: ["#bfdbfe", "#0b3b85"],
+    scheduled: ["#fed7aa", "#5a2a07"],
+    pending: ["#fed7aa", "#5a2a07"],
+    loading: ["#fed7aa", "#5a2a07"],
+    "in-transit": ["#bbf7d0", "#06452c"],
+    delivered: ["#cbd5e1", "#344054"],
+    locked: ["#cbd5e1", "#344054"],
+    cancelled: ["#e4e4e7", "#697382"],
+    "at-risk": ["#fecaca", "#b42318"],
+  };
+  const [background, text] = tripColors[tripStatus] || [base.background, base.text];
+  return { ...base, background, text, border: "rgba(15, 23, 42, 0.12)" };
+}
+
+function drawRoundRect(context, x, y, width, height, radius) {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.lineTo(x + width - safeRadius, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+  context.lineTo(x + width, y + height - safeRadius);
+  context.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+  context.lineTo(x + safeRadius, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+  context.lineTo(x, y + safeRadius);
+  context.quadraticCurveTo(x, y, x + safeRadius, y);
+  context.closePath();
+}
+
+function drawTextEllipsis(context, text, x, y, maxWidth) {
+  if (context.measureText(text).width <= maxWidth) {
+    context.fillText(text, x, y);
+    return;
+  }
+  let value = text;
+  while (value.length > 1 && context.measureText(`${value}...`).width > maxWidth) {
+    value = value.slice(0, -1);
+  }
+  context.fillText(`${value}...`, x, y);
+}
+
+function downloadDataUrl(url, filename) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
 function renderTimeline() {
   const records = getFilteredRecords()
-    .filter((record) => parseAppointmentDate(record.scheduleTime))
-    .sort((a, b) => (parseAppointmentDate(a.scheduleTime)?.getTime() || 0) - (parseAppointmentDate(b.scheduleTime)?.getTime() || 0));
+    .filter((record) => displayDateForRecord(record))
+    .sort((a, b) => (displayDateForRecord(a)?.getTime() || 0) - (displayDateForRecord(b)?.getTime() || 0));
   const groups = new Map();
   records.forEach((record) => {
-    const key = scheduleDateKey(record.scheduleTime) || dateKey(parseAppointmentDate(record.scheduleTime));
+    const key = displayDateKey(record);
     const items = groups.get(key) || [];
     items.push(record);
     groups.set(key, items);
   });
 
   if (!records.length) {
-    els.timelineView.innerHTML = '<div class="timeline-empty">No scheduled appointments match the current filters.</div>';
+    els.timelineView.innerHTML = `<div class="timeline-empty">No ${escapeHtml(currentTimeModeLabel())} records match the current filters.</div>`;
     return;
   }
 
@@ -1184,7 +1611,7 @@ function renderTimeline() {
         <section class="timeline-day" data-date-key="${escapeAttr(key)}">
           <header class="timeline-day-head">
             <strong>${escapeHtml(formatTimelineDate(key))}</strong>
-            <span>${items.length} appointment${items.length === 1 ? "" : "s"}</span>
+            <span>${items.length} ${escapeHtml(currentTimeModeLabel())}${items.length === 1 ? "" : "s"}</span>
           </header>
           <div class="timeline-axis" aria-hidden="true"></div>
           <div class="timeline-items">
@@ -1231,7 +1658,7 @@ function renderTimelineItem(record) {
   ` : "";
   return `
     <button class="timeline-item appt-status-${escapeAttr(appointmentStatusClass(record.status))}${tripClass}${selected}" type="button" data-key="${escapeAttr(record.key)}">
-      <time>${escapeHtml(calendarTimeLabel(record.scheduleTime))}</time>
+      <time>${escapeHtml(displayCalendarTimeLabel(record))}</time>
       <div class="timeline-item-body">
         <div class="timeline-item-main">
           <strong>${escapeHtml(record.fc || "-")}</strong>
@@ -1245,6 +1672,321 @@ function renderTimelineItem(record) {
       </div>
     </button>
   `;
+}
+
+function renderMapView() {
+  const records = getFilteredRecords();
+  const aggregation = buildMapAggregation(records);
+  els.mapResultCount.textContent = `${aggregation.mappedRecordCount} mapped of ${records.length} visible records`;
+  renderMapMissingCoordinates(aggregation.missing);
+  renderMapSummary(aggregation);
+
+  if (state.viewMode !== "map") return;
+  if (!records.length) {
+    setMapProviderMessage(state.records.length ? "No appointments match the current filters." : "Upload appointments to view FC markers.");
+  } else if (!aggregation.groups.length && aggregation.missing.length) {
+    setMapProviderMessage("No matching appointments have FC coordinates. See the missing coordinates summary.");
+  } else {
+    setMapProviderMessage("");
+  }
+
+  if (!ensureMapProviderReady()) return;
+  if (!state.map.initialized) {
+    initializeMapboxMap(aggregation);
+    return;
+  }
+  updateMapMarkers(aggregation);
+  fitMapToAggregation(aggregation, false);
+}
+
+function buildMapAggregation(records) {
+  const groupsByFc = new Map();
+  const missingByFc = new Map();
+
+  records.forEach((record) => {
+    const fcCode = clean(record.fc) || "Unknown FC";
+    const fc = fcForRecord(record);
+    const latitude = numberOrNull(fc && fc.latitude);
+    const longitude = numberOrNull(fc && fc.longitude);
+    if (!fc || latitude === null || longitude === null) {
+      const missing = missingByFc.get(fcCode) || { fc: fcCode, count: 0 };
+      missing.count += 1;
+      missingByFc.set(fcCode, missing);
+      return;
+    }
+
+    const group = groupsByFc.get(fcCode) || {
+      fc: fcCode,
+      city: clean(fc.city),
+      state: clean(fc.state),
+      address: clean(fc.address),
+      latitude,
+      longitude,
+      records: [],
+      statusCounts: new Map(),
+      loadTypeCounts: new Map(),
+      earliestRecord: null,
+      earliestDate: null,
+      statusClass: "normal",
+    };
+    group.records.push(record);
+    incrementCount(group.statusCounts, clean(record.status) || "Unknown");
+    incrementCount(group.loadTypeCounts, clean(record.loadType) || "Unassigned");
+    const date = displayDateForRecord(record);
+    if (date && (!group.earliestDate || date < group.earliestDate)) {
+      group.earliestDate = date;
+      group.earliestRecord = record;
+    }
+    if (!group.earliestRecord) group.earliestRecord = record;
+    group.statusClass = mostUrgentStatusClass(group.records);
+    groupsByFc.set(fcCode, group);
+  });
+
+  const groups = [...groupsByFc.values()]
+    .map((group) => ({ ...group, count: group.records.length }))
+    .sort((a, b) => b.count - a.count || a.fc.localeCompare(b.fc, undefined, { numeric: true }));
+  const missing = [...missingByFc.values()].sort((a, b) => b.count - a.count || a.fc.localeCompare(b.fc, undefined, { numeric: true }));
+  return {
+    groups,
+    missing,
+    totalRecordCount: records.length,
+    mappedRecordCount: groups.reduce((total, group) => total + group.count, 0),
+  };
+}
+
+function incrementCount(map, key) {
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function mostUrgentStatusClass(records) {
+  const classes = records.map((record) => appointmentStatusClass(record.status));
+  if (classes.includes("issue")) return "issue";
+  if (classes.includes("pending")) return "pending";
+  if (classes.includes("normal")) return "normal";
+  return "done";
+}
+
+function renderMapMissingCoordinates(missing) {
+  els.mapMissingCoordinates.classList.toggle("hidden", !missing.length);
+  if (!missing.length) {
+    els.mapMissingCoordinates.innerHTML = "";
+    return;
+  }
+  els.mapMissingCoordinates.innerHTML = `
+    <h3>Missing Coordinates</h3>
+    <p>${escapeHtml(missing.reduce((total, item) => total + item.count, 0))} visible appointments are not plotted.</p>
+    <div class="map-missing-list">
+      ${missing.map((item) => `
+        <div>
+          <strong>${escapeHtml(item.fc)}</strong>
+          <span>${escapeHtml(item.count)} ${item.count === 1 ? "appointment" : "appointments"}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderMapSummary(aggregation) {
+  const selected = aggregation.groups.find((group) => group.fc === state.map.selectedFc) || aggregation.groups[0] || null;
+  if (!selected) {
+    els.mapSelectedSummary.innerHTML = `
+      <h3>No FC selected</h3>
+      <p>${aggregation.totalRecordCount ? "No matching mapped appointments." : "Click a marker to inspect appointments for that FC."}</p>
+    `;
+    return;
+  }
+
+  if (state.map.selectedFc !== selected.fc) state.map.selectedFc = selected.fc;
+  els.mapSelectedSummary.innerHTML = `
+    <h3>${escapeHtml(selected.fc)} <span>${escapeHtml(selected.count)}</span></h3>
+    <p>${escapeHtml(compactUnique([selected.city, selected.state]).join(", ") || selected.address || "FC coordinates available")}</p>
+    <dl class="map-summary-meta">
+      <div><dt>Earliest ${escapeHtml(currentTimeModeLabel())}</dt><dd>${escapeHtml(selected.earliestRecord ? displayTimeText(selected.earliestRecord) : "-")}</dd></div>
+      <div><dt>Status Mix</dt><dd>${escapeHtml(countMapText(selected.statusCounts))}</dd></div>
+      <div><dt>Load Type Mix</dt><dd>${escapeHtml(countMapText(selected.loadTypeCounts))}</dd></div>
+    </dl>
+    <div class="map-fc-records">
+      ${selected.records.slice(0, 8).map((record) => `
+        <button class="${record.key === state.selectedKey ? "selected" : ""}" type="button" data-map-record-key="${escapeAttr(record.key)}">
+          <strong>${escapeHtml(record.appointmentId || record.referenceCode || "-")}</strong>
+          <span>${escapeHtml(displayTimeText(record))}</span>
+        </button>
+      `).join("")}
+    </div>
+  `;
+  els.mapSelectedSummary.querySelectorAll("[data-map-record-key]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedKey = button.dataset.mapRecordKey;
+      render();
+    });
+  });
+}
+
+function countMapText(counts) {
+  return [...counts.entries()].map(([label, count]) => `${label}: ${count}`).join(", ") || "-";
+}
+
+function ensureMapProviderReady() {
+  const config = mapConfig();
+  const token = mapboxToken();
+  if (!token) {
+    setMapProviderMessage("Mapbox token is not configured. Copy map-config.example.js to map-config.js, set mapboxToken locally, and configure Mapbox account usage limits or billing alerts.");
+    return false;
+  }
+  if (!window.mapboxgl) {
+    setMapProviderMessage("Mapbox GL JS did not load. Table, Calendar, Timeline, import, export, and detail workflows remain available.");
+    return false;
+  }
+  if (state.map.providerError) {
+    setMapProviderMessage(state.map.providerError);
+    return false;
+  }
+  return true;
+}
+
+function initializeMapboxMap(aggregation) {
+  if (state.map.initializing || state.map.initialized) return;
+  if (dailyMapboxUsage().count >= MAPBOX_DAILY_LIMIT) {
+    setMapProviderMessage(`Daily local Mapbox initialization limit reached (${MAPBOX_DAILY_LIMIT}). Non-map appointment workflows remain available.`);
+    return;
+  }
+
+  state.map.initializing = true;
+  try {
+    window.mapboxgl.accessToken = mapboxToken();
+    const config = mapConfig();
+    state.map.instance = new window.mapboxgl.Map({
+      container: els.appointmentMapCanvas,
+      style: clean(config.mapStyle) || "mapbox://styles/mapbox/satellite-streets-v12",
+      projection: "globe",
+      center: aggregation.groups.length ? [aggregation.groups[0].longitude, aggregation.groups[0].latitude] : CONTINENTAL_US_CAMERA.center,
+      zoom: aggregation.groups.length ? 4 : CONTINENTAL_US_CAMERA.zoom,
+      pitch: aggregation.groups.length ? 35 : CONTINENTAL_US_CAMERA.pitch,
+      bearing: aggregation.groups.length ? -12 : CONTINENTAL_US_CAMERA.bearing,
+      maxZoom: 21,
+      antialias: true,
+    });
+    state.map.initialized = true;
+    incrementDailyMapboxUsage();
+    state.map.instance.addControl(new window.mapboxgl.NavigationControl({ visualizePitch: true }), "top-right");
+    state.map.instance.on("style.load", () => {
+      state.map.instance.setFog({});
+      updateMapMarkers(aggregation);
+      fitMapToAggregation(aggregation, true);
+    });
+    state.map.instance.on("error", (event) => {
+      const message = event && event.error && event.error.message ? event.error.message : "Mapbox map error.";
+      state.map.providerError = message;
+      setMapProviderMessage(message);
+    });
+    requestAnimationFrame(() => state.map.instance.resize());
+    setMapProviderMessage("");
+  } catch (error) {
+    state.map.providerError = `Map initialization failed: ${error.message}`;
+    setMapProviderMessage(state.map.providerError);
+  } finally {
+    state.map.initializing = false;
+  }
+}
+
+function updateMapMarkers(aggregation) {
+  if (!state.map.instance) return;
+  state.map.markers.forEach((marker, fc) => {
+    marker.remove();
+    state.map.markers.delete(fc);
+  });
+
+  aggregation.groups.forEach((group) => {
+    const element = buildMapMarkerElement(group);
+    const marker = new window.mapboxgl.Marker({ element, anchor: "bottom" })
+      .setLngLat([group.longitude, group.latitude])
+      .addTo(state.map.instance);
+    state.map.markers.set(group.fc, marker);
+  });
+}
+
+function buildMapMarkerElement(group) {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.className = `map-marker status-${group.statusClass}${group.fc === state.map.selectedFc ? " selected" : ""}`;
+  element.style.setProperty("--marker-scale", String(Math.min(1.8, 1 + Math.log10(group.count) * 0.35)));
+  element.title = `${group.fc} - ${group.count} appointments`;
+  element.innerHTML = `<strong>${escapeHtml(group.fc)}</strong><span>${escapeHtml(group.count)}</span>`;
+  element.addEventListener("click", (event) => {
+    event.stopPropagation();
+    selectMapFc(group);
+  });
+  return element;
+}
+
+function selectMapFc(group) {
+  state.map.selectedFc = group.fc;
+  state.selectedKey = (group.earliestRecord || group.records[0]).key;
+  render();
+}
+
+function fitMapToAggregation(aggregation, force) {
+  if (!state.map.instance || !state.map.initialized) return;
+  if (!force && state.map.instance.getZoom() > 5) return;
+  if (!aggregation.groups.length) {
+    state.map.instance.easeTo({ ...CONTINENTAL_US_CAMERA, duration: force ? 0 : 500 });
+    return;
+  }
+  if (aggregation.groups.length === 1) {
+    const group = aggregation.groups[0];
+    state.map.instance.easeTo({
+      center: [group.longitude, group.latitude],
+      zoom: Math.max(8, state.map.instance.getZoom()),
+      pitch: 45,
+      bearing: -12,
+      duration: force ? 0 : 500,
+    });
+    return;
+  }
+  const bounds = new window.mapboxgl.LngLatBounds();
+  aggregation.groups.forEach((group) => bounds.extend([group.longitude, group.latitude]));
+  state.map.instance.fitBounds(bounds, { padding: 80, maxZoom: 12, duration: force ? 0 : 500 });
+}
+
+function flyMapToSouthernCalifornia() {
+  if (!state.map.instance) return;
+  state.map.instance.easeTo({ ...SOUTHERN_CALIFORNIA_CAMERA, duration: 700 });
+}
+
+function setMapProviderMessage(message) {
+  els.mapProviderMessage.textContent = message;
+  els.mapProviderMessage.classList.toggle("hidden", !message);
+}
+
+function mapConfig() {
+  return window.TMS_MAP_CONFIG || {};
+}
+
+function mapboxToken() {
+  const config = mapConfig();
+  return clean(config.mapboxToken || config.accessToken || config.mapboxAccessToken);
+}
+
+function dailyMapboxUsage() {
+  const today = dateKey(new Date());
+  try {
+    const usage = JSON.parse(localStorage.getItem(MAPBOX_USAGE_STORAGE_KEY) || "{}");
+    if (usage.date === today) return { date: today, count: Number(usage.count) || 0 };
+  } catch (error) {
+    console.warn("Mapbox usage counter unavailable.", error);
+  }
+  return { date: today, count: 0 };
+}
+
+function incrementDailyMapboxUsage() {
+  const usage = dailyMapboxUsage();
+  const next = { date: usage.date, count: usage.count + 1 };
+  try {
+    localStorage.setItem(MAPBOX_USAGE_STORAGE_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.warn("Mapbox usage counter could not be saved.", error);
+  }
+  return next;
 }
 
 function calendarPrimaryLabel(record) {
@@ -1291,8 +2033,25 @@ function calendarTimeLabel(value) {
 function formatLosAngelesTime(value) {
   const date = parseAppointmentDate(value);
   if (!date) return "-";
+  return formatLosAngelesDate(date);
+}
+
+function formatLosAngelesDate(date) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function formatDateTimeWithZone(date) {
+  if (!date) return "-";
+  return new Intl.DateTimeFormat("en-US", {
     month: "2-digit",
     day: "2-digit",
     year: "numeric",
@@ -1400,6 +2159,7 @@ async function updateRecordField(record, field, value, source) {
   renderRows();
   renderViewMode();
   renderCalendar();
+  renderMapView();
   renderDetail();
 }
 
@@ -1535,13 +2295,15 @@ function setImportStatus(message) {
 }
 
 function exportCsv() {
-  const headers = ["ISA", "FC", "Status", "Schedule Time", "Los Angeles Time", "CRDD", "Load Type", "Reference Code", "Trailer", "Notes", "Source", "Last Updated"];
+  const headers = ["ISA", "FC", "Status", "Schedule Time", "Los Angeles Time", "Latest Departure", "Legal Transit Hours", "CRDD", "Load Type", "Reference Code", "Trailer", "Notes", "Source", "Last Updated"];
   const rows = getFilteredRecords().map((record) => [
     record.appointmentId,
     record.fc,
     record.status,
     record.scheduleTime,
     formatLosAngelesTime(record.scheduleTime),
+    latestDepartureDate(record) ? formatLosAngelesDate(latestDepartureDate(record)) : "",
+    legalTransitHoursForRecord(record) ?? "",
     record.crdd,
     record.loadType,
     record.referenceCode,
@@ -1693,6 +2455,17 @@ function readCellValue(cellNode, sharedStrings) {
 
 function columnIndex(letters) {
   return letters.split("").reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+}
+
+function numberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function formatHours(value) {
+  const hours = numberOrNull(value);
+  if (hours === null) return "-";
+  return `${hours.toFixed(hours >= 10 ? 1 : 2)}h`;
 }
 
 function escapeHtml(value) {

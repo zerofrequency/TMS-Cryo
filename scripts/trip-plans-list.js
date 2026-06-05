@@ -261,7 +261,7 @@
           <div><dt>Destination</dt><dd>${escapeHtml(stop.destination || "-")}</dd></div>
           <div><dt>Appointment</dt><dd>${escapeHtml(stop.schedule_time || "-")}</dd></div>
           <div><dt>Countdown</dt><dd>${escapeHtml(formatCountdown(stopCountdown(stop)))}</dd></div>
-          <div><dt>Transit</dt><dd>${escapeHtml(formatDays(stop.transit_days))}</dd></div>
+          <div><dt>Legal Transit</dt><dd>${escapeHtml(formatDays(stop.transit_days))}</dd></div>
         </dl>
       </article>
     `;

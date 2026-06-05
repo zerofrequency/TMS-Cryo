@@ -44,7 +44,12 @@ Import Carrier Central appointment data and confirm appointments are searchable,
 - Imported appointments are merged by ISA.
 - Re-importing the same ISA updates appointment details instead of creating duplicates.
 - Manual Load Type and Notes are preserved unless previously blank.
-- Table, calendar, and timeline views show consistent appointment data.
+- Table, calendar, timeline, and map views show consistent appointment data.
+- The appointment table, calendar, timeline, and map can switch between appointment time and latest departure time.
+- Latest departure time is calculated from appointment time minus `fba_fcs.legal_transit_hours`.
+- The appointment map aggregates the current filtered records by FC and shows one 3D earth/globe marker per FC with an appointment count.
+- The appointment map can zoom into the Los Angeles / Inland Empire area closely enough to inspect nearby FC warehouse markers individually.
+- FCs without coordinates are reported in the appointment map view without blocking the rest of the Appt page.
 - Exported CSV includes current filtered records.
 
 ## Flow 2: Manual Appointment
@@ -107,7 +112,7 @@ Create a trip plan from one or more appointments.
 6. Enter the responsible trailer number.
 7. Enter the responsible truck number.
 8. Bind each stop to an existing appointment ISA or enter a private address appointment.
-9. Confirm destination, schedule time, transit days, and buffer.
+9. Confirm destination, schedule time, legal transit days, and buffer.
 10. Save Trip Plan.
 11. Return to Trip Plans list.
 
@@ -116,7 +121,7 @@ Create a trip plan from one or more appointments.
 - The trip plan is saved to Supabase.
 - Stops are saved in the correct order.
 - Appointment ISA stops show appointment-derived destination and schedule data.
-- Buffer is calculated for each stop.
+- Buffer is calculated for each stop using `fba_fcs.legal_transit_hours` for known FC destinations.
 - Trailer number and truck number are saved with the trip plan.
 - Trailer number and truck number are visible when the trip is reopened.
 - New plan appears in the Trip Plans list.

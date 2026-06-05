@@ -41,6 +41,7 @@
       </header>
 
       <section class="filters top-toolbar inventory-toolbar" aria-label="Inventory filters">
+          <nav id="geoStatusTabs" class="inventory-status-tabs" aria-label="Inventory geo status pages"></nav>
           <label class="filter-search">
             Search
             <input id="searchInput" name="inventorySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Ticket, shipment, PO, external ref, product, container, pallet..." />
@@ -53,12 +54,19 @@
               </select>
             </label>
             <label>
-              Status
-              <select id="statusFilter">
-                <option value="">All statuses</option>
+              Record Status
+              <select id="recordStatusFilter">
+                <option value="">All record statuses</option>
+              </select>
+            </label>
+            <label>
+              Exception Status
+              <select id="exceptionStatusFilter">
+                <option value="">All exception statuses</option>
               </select>
             </label>
           </div>
+          <div id="stageStatusTabs" class="inventory-stage-tabs" aria-label="Stage status filters"></div>
           <button id="clearFilters" class="button subtle" type="button">Clear filters</button>
           <button id="exportButton" class="button" type="button">Export CSV</button>
       </section>
@@ -83,8 +91,9 @@
                   <th>Pallet Ref</th>
                   <th>Linked Trip Plan</th>
                   <th>FC</th>
-                  <th>Status</th>
-                  <th>Transport</th>
+                  <th>Record</th>
+                  <th>Geo</th>
+                  <th>Stage</th>
                   <th>Exception</th>
                   <th>Shipment / PO Count</th>
                   <th>Weight (KG)</th>
@@ -142,12 +151,16 @@
                 <input id="fc" type="text" required />
               </label>
               <label>
-                Status
-                <select id="inventoryStatus" required></select>
+                Record Status
+                <select id="recordStatus" required></select>
               </label>
               <label>
-                Transport Status
-                <select id="transportStatus" required></select>
+                Geo Status
+                <select id="geoStatus" required></select>
+              </label>
+              <label>
+                Stage Status
+                <select id="stageStatus" required></select>
               </label>
               <label>
                 Exception Status

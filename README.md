@@ -21,14 +21,14 @@ If you use Git worktrees locally, treat them as an advanced personal setup only.
 Run a local development server from the project root, then open the homepage through HTTP:
 
 ```sh
-python3 -m http.server 5173
+npm run dev
 ```
 
 ```text
 http://127.0.0.1:5173/
 ```
 
-Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Create Trip Plan** from that page to add a new plan. If port `5173` is already in use, run the same command with another local port and open that local URL. Avoid using `file://` as the normal testing path.
+Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Create Trip Plan** from that page to add a new plan. If port `5173` is already in use, run `npm run dev -- --port 8080` and open that local URL. Avoid using `file://` as the normal testing path.
 
 See `docs/LOCAL_DEV_SERVER_GUIDE.md` for the full local testing workflow.
 
@@ -48,6 +48,8 @@ Use **Upload CSV/XLSX** and select an Amazon Carrier Central download file. The 
 
 Use the table/calendar switch above the appointment list to change views. The calendar view shows appointments by scheduled date with only `FC` and `ISA`; click an appointment to open it in the detail panel.
 
+Use the time toggle above the appointment list to switch the table, calendar, and timeline between appointment time and latest departure time. Latest departure is calculated from the appointment time minus `fba_fcs.legal_transit_hours`, so dispatch planning can sort and group by the latest compliant loading/departure deadline.
+
 Use **Add Manually** to create or update a single appointment by ISA. Manual entries merge by `ISA` and save to Supabase or the local backup just like CSV/XLSX imports.
 
 ## Storage
@@ -60,9 +62,11 @@ CSV/XLSX uploads are merged by ISA and saved to Supabase when `supabase-config.j
 
 ## Supabase setup
 
-Run `sql/supabase-schema.sql` in the Supabase SQL editor before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data and weekly FC appointment tables. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans. The current direct-browser setup uses the anon key and an open personal-use RLS policy. Tighten this later when adding Supabase Auth.
+Run `sql/supabase-schema.sql` in the Supabase SQL editor before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data, weekly FC appointment table, and persisted FC route cache table. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans. The current direct-browser setup uses the anon key and an open personal-use RLS policy. Tighten this later when adding Supabase Auth.
 
 Run `sql/supabase-resources-schema.sql` to add Carrier, Dock, and Loading Crew resource tables plus their assignment tables.
+
+Run `sql/supabase-fba-fc-final-data-update-2026-06-02.sql` to reapply the latest 212-row FC address, coordinate, and route-duration update if the `fba_fcs` data needs to be restored. Run `sql/supabase-fba-fc-legal-transit-hours-update-2026-06-02.sql` to add and fill the FMCSA-style `legal_transit_hours` planning estimate.
 
 Create and edit `supabase-config.js`:
 
@@ -99,13 +103,19 @@ window.TMS_MAP_CONFIG = {
 
 `pages/fc-dashboard.html` shows FCs with a non-empty weekly appointment status. Select a week, choose an FC, enter the appointment status, and save. Clearing the status removes that FC from the selected week view. The list and Three.js map both hide empty weekly rows.
 
+## FC route cache
+
+`public.fba_fcs` stores FC base data, `transit_days`, and `legal_transit_hours`. `public.fba_fc_route_cache` stores persisted Google route data by origin and FC so route distance, duration, and encoded polylines do not have to be fetched repeatedly.
+
+The current local route package is under `outputs/fc-route-cache-2026-06-02/` and uses origin `4651 E Francis dock 21, Ontario, CA 91761`. See `docs/FC_ROUTE_CACHE_WORKFLOW.md` for the data model, generated artifacts, and rebuild guidance.
+
 ## Trip plans
 
 `pages/trip-plans.html` is the outbound trip plan review page. It shows plan status, ETD, stops, destinations, transport, and minimum time buffer.
 
 `pages/trip-plan-detail.html` shows a single trip plan with a stage flow for planned, waiting, loading, in transit, delivered, and voided. Open it from the **View** button in the Trip Plans detail panel.
 
-`pages/create-trip-plans.html` creates outbound trip plans. A plan can be single-drop, two-drop, three-drop, or four-drop. Each stop can bind to an existing ISA or use manually entered private-address appointment information. The page records ETD, ISA/reference, destination, transport, transit days, appointment time, and time buffer.
+`pages/create-trip-plans.html` creates outbound trip plans. A plan can be single-drop, two-drop, three-drop, or four-drop. Each stop can bind to an existing ISA or use manually entered private-address appointment information. The page records ETD, ISA/reference, destination, transport, legal transit days, appointment time, and time buffer. For known FC destinations, buffer calculation uses `fba_fcs.legal_transit_hours`; manual private destinations fall back to the entered legal transit days.
 
 ## Resources
 

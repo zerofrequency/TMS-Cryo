@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Carrier Appointment Manager</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="./styles/site-nav.css" />
     <link rel="stylesheet" href="./styles/appointments.css?v=20260601-import-summary-float" />
   </head>
@@ -89,10 +90,16 @@
               <h2>Appointment List</h2>
               <p id="resultCount">No records</p>
             </div>
+            <div class="time-controls" aria-label="Time display mode">
+              <button id="appointmentTimeViewButton" class="time-button active" type="button">Appointment Time</button>
+              <button id="latestDepartureViewButton" class="time-button" type="button">Latest Departure</button>
+              <button id="soloSafeTransitViewButton" class="time-button" type="button">Solo Safe Transit</button>
+            </div>
             <div class="view-controls" aria-label="View mode">
               <button id="tableViewButton" class="view-button active" type="button">Table</button>
               <button id="calendarViewButton" class="view-button" type="button">Calendar</button>
               <button id="timelineViewButton" class="view-button" type="button">Timeline</button>
+              <button id="mapViewButton" class="view-button" type="button">Map</button>
             </div>
             <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Configure Supabase for cloud sync.</div>
           </div>
@@ -103,8 +110,8 @@
                   <th data-sort="appointmentId">ISA</th>
                   <th data-sort="fc">FC</th>
                   <th data-sort="status">Status</th>
-                  <th data-sort="scheduleTime">Schedule Time</th>
-                  <th data-sort="laTime">Los Angeles Time</th>
+                  <th id="scheduleColumnHeader" data-sort="scheduleTime">Schedule Time</th>
+                  <th id="laTimeColumnHeader" data-sort="laTime">Los Angeles Time</th>
                   <th data-sort="crdd">CRDD</th>
                   <th data-sort="loadType">Load Type</th>
                 </tr>
@@ -118,6 +125,7 @@
                 <button id="prevMonthButton" class="icon-button" type="button" aria-label="Previous period">&lt;</button>
                 <button id="todayCalendarButton" class="button subtle" type="button">Today</button>
                 <button id="nextMonthButton" class="icon-button" type="button" aria-label="Next period">&gt;</button>
+                <button id="exportWeekImageButton" class="button subtle calendar-export-button" type="button">Export Week PNG</button>
               </div>
               <strong id="calendarTitle"></strong>
               <div class="calendar-subviews" aria-label="Calendar subview">
@@ -129,6 +137,26 @@
             <div id="calendarGrid" class="calendar-grid" aria-label="Appointment calendar"></div>
           </div>
           <div id="timelineView" class="timeline-view hidden" aria-label="Appointment timeline"></div>
+          <div id="mapView" class="appointment-map-view hidden" aria-label="Appointment FC map">
+            <div class="map-toolbar">
+              <div>
+                <strong>FC Map</strong>
+                <span id="mapResultCount">No mapped appointments</span>
+              </div>
+              <button id="mapSouthernCaliforniaButton" class="button subtle" type="button">LA / Inland Empire</button>
+            </div>
+            <div id="mapProviderMessage" class="map-provider-message hidden"></div>
+            <div class="map-layout">
+              <div id="appointmentMapCanvas" class="appointment-map-canvas"></div>
+              <aside class="map-side-panel" aria-label="Selected FC map summary">
+                <section id="mapSelectedSummary" class="map-summary">
+                  <h3>No FC selected</h3>
+                  <p>Click a marker to inspect appointments for that FC.</p>
+                </section>
+                <section id="mapMissingCoordinates" class="map-missing hidden" aria-label="Missing FC coordinates"></section>
+              </aside>
+            </div>
+          </div>
           <div id="emptyState" class="empty-state">
             <h3>No appointments loaded</h3>
             <p>Upload an Amazon Carrier Central CSV or XLSX download to begin.</p>
@@ -243,6 +271,8 @@
     </main>
 
     <script src="./supabase-config.js"></script>
+    <script src="./map-config.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
     <script src="./scripts/clocks.js"></script>
     <script src="./scripts/appointments.js"></script>
   </body>

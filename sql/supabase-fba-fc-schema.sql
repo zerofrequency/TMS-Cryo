@@ -8,12 +8,16 @@ create table if not exists public.fba_fcs (
   address text,
   city text,
   transit_days numeric,
+  legal_transit_hours numeric,
   remark text,
   latitude numeric,
   longitude numeric,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.fba_fcs
+add column if not exists legal_transit_hours numeric;
 
 create table if not exists public.fc_weekly_appointments (
   fc text not null references public.fba_fcs(fc) on delete cascade,
@@ -24,6 +28,26 @@ create table if not exists public.fc_weekly_appointments (
   ),
   updated_at timestamptz not null default now(),
   primary key (fc, week_start)
+);
+
+create table if not exists public.fba_fc_route_cache (
+  origin_key text not null,
+  fc text not null references public.fba_fcs(fc) on delete cascade,
+  origin_address text not null,
+  destination_address text,
+  destination_latitude numeric,
+  destination_longitude numeric,
+  distance_meters integer,
+  distance_miles numeric,
+  duration_seconds integer,
+  duration_minutes numeric,
+  duration_text text,
+  routing_preference text,
+  route_description text,
+  encoded_polyline text,
+  coordinate_count integer,
+  generated_at timestamptz not null,
+  primary key (origin_key, fc)
 );
 
 alter table public.fc_weekly_appointments
@@ -38,9 +62,11 @@ check (
 
 create index if not exists fc_weekly_appointments_week_idx on public.fc_weekly_appointments (week_start);
 create index if not exists fba_fcs_state_idx on public.fba_fcs (state);
+create index if not exists fba_fc_route_cache_fc_idx on public.fba_fc_route_cache (fc);
 
 alter table public.fba_fcs enable row level security;
 alter table public.fc_weekly_appointments enable row level security;
+alter table public.fba_fc_route_cache enable row level security;
 
 drop policy if exists "personal anon read fba_fcs" on public.fba_fcs;
 drop policy if exists "personal anon write fba_fcs" on public.fba_fcs;
@@ -51,6 +77,11 @@ drop policy if exists "personal anon read fc_weekly_appointments" on public.fc_w
 drop policy if exists "personal anon write fc_weekly_appointments" on public.fc_weekly_appointments;
 create policy "personal anon read fc_weekly_appointments" on public.fc_weekly_appointments for select to anon using (true);
 create policy "personal anon write fc_weekly_appointments" on public.fc_weekly_appointments for all to anon using (true) with check (true);
+
+drop policy if exists "personal anon read fba_fc_route_cache" on public.fba_fc_route_cache;
+drop policy if exists "personal anon write fba_fc_route_cache" on public.fba_fc_route_cache;
+create policy "personal anon read fba_fc_route_cache" on public.fba_fc_route_cache for select to anon using (true);
+create policy "personal anon write fba_fc_route_cache" on public.fba_fc_route_cache for all to anon using (true) with check (true);
 
 -- FC seed chunk 1
 insert into public.fba_fcs (fc, zip, state, address, city, transit_days, remark, latitude, longitude) values
