@@ -5,7 +5,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const host = "127.0.0.1";
+const host = readArg("--host") || process.env.HOST || "127.0.0.1";
 const port = Number(readArg("--port") || process.env.PORT || 5173);
 
 const mimeTypes = new Map([
