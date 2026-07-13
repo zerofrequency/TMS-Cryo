@@ -4,7 +4,7 @@
 # Local environment and keys
 .env
 .env.*
-supabase-config.js
+tms-config.js
 map-config.js
 
 # Personal imported/exported data
