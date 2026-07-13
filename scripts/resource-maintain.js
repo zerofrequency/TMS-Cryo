@@ -78,7 +78,7 @@
 
   const state = {
     activeType: "fleet",
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     resources: [],
     editingResourceId: "",
   };
@@ -86,14 +86,14 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     bindEvents();
     const requestedTypeParam = new URLSearchParams(window.location.search).get("type");
     const requestedType = requestedTypeParam === "carrier" ? "fleet" : requestedTypeParam;
     if (RESOURCE_TYPES[requestedType]) state.activeType = requestedType;
     renderShell();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       return;
     }
     await loadResources();
@@ -106,7 +106,7 @@
         state.editingResourceId = "";
         state.resources = [];
         renderShell();
-        if (state.supabase.enabled) loadResources();
+        if (state.apiEnabled) loadResources();
       });
     });
     els.refreshButton.addEventListener("click", loadResources);
@@ -126,18 +126,15 @@
     });
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadResources() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const config = currentConfig();
-      const resources = await supabaseRequest(`${config.baseTable}?select=*&order=created_at.desc`);
+      const resources = await apiRequest(`${config.baseTable}?select=*&order=created_at.desc`);
       state.resources = resources.map(normalizeResource);
       setCloudStatus("Connected", "connected");
       render();
@@ -277,7 +274,7 @@
 
   async function saveResource(event) {
     event.preventDefault();
-    if (!state.supabase.enabled) return;
+    if (!state.apiEnabled) return;
     const config = currentConfig();
     const payload = readResourcePayload(config);
     if (!payload) return;
@@ -287,7 +284,7 @@
       const path = isEditing
         ? `${config.baseTable}?id=eq.${encodeURIComponent(state.editingResourceId)}`
         : config.baseTable;
-      await supabaseRequest(path, {
+      await apiRequest(path, {
         method: isEditing ? "PATCH" : "POST",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify({ ...payload, updated_at: new Date().toISOString() }),
@@ -335,23 +332,8 @@
     };
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function currentConfig() {

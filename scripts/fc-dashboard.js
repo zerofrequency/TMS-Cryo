@@ -53,7 +53,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     fcs: [],
     weekly: new Map(),
     view: "list",
@@ -69,12 +69,12 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     bindEvents();
     els.weekInput.value = dateToWeekValue(new Date());
     renderWeekLabel();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       render();
       return;
     }
@@ -99,17 +99,14 @@
     });
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadData() {
     try {
-      setCloudStatus("Loading Supabase", "");
-      state.fcs = await supabaseRequest(`${FC_TABLE}?select=*&order=fc.asc`);
+      setCloudStatus("Loading TMS data", "");
+      state.fcs = await apiRequest(`${FC_TABLE}?select=*&order=fc.asc`);
       renderFcOptions();
       await loadWeek();
       setCloudStatus("Connected", "connected");
@@ -120,11 +117,11 @@
   }
 
   async function loadWeek() {
-    if (!state.supabase.enabled) return;
+    if (!state.apiEnabled) return;
     const week = selectedWeekStart();
     if (!week) return;
     try {
-      const rows = await supabaseRequest(`${WEEK_TABLE}?select=*&week_start=eq.${encodeURIComponent(week)}`);
+      const rows = await apiRequest(`${WEEK_TABLE}?select=*&week_start=eq.${encodeURIComponent(week)}`);
       state.weekly = new Map(rows.map((row) => [row.fc, normalizeStatus(row.appointment_status)]).filter((row) => row[1]));
       fillSelectedFcStatus();
       render();
@@ -146,12 +143,12 @@
 
     try {
       if (!status) {
-        await supabaseRequest(`${WEEK_TABLE}?fc=eq.${encodeURIComponent(fc)}&week_start=eq.${encodeURIComponent(week)}`, {
+        await apiRequest(`${WEEK_TABLE}?fc=eq.${encodeURIComponent(fc)}&week_start=eq.${encodeURIComponent(week)}`, {
           method: "DELETE",
         });
         state.weekly.delete(fc);
       } else {
-        await supabaseRequest(`${WEEK_TABLE}?on_conflict=fc,week_start`, {
+        await apiRequest(`${WEEK_TABLE}?on_conflict=fc,week_start`, {
           method: "POST",
           headers: { Prefer: "resolution=merge-duplicates" },
           body: JSON.stringify([{ fc, week_start: week, appointment_status: status, updated_at: new Date().toISOString() }]),
@@ -855,23 +852,8 @@
     return [cx * factor, cy * factor];
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function setCloudStatus(message, type) {

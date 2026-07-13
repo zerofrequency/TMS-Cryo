@@ -44,7 +44,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     ticketId: "",
     ticket: null,
     tripPlan: null,
@@ -53,37 +53,34 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     state.ticketId = new URLSearchParams(window.location.search).get("id") || "";
     if (!state.ticketId) {
       showError("Missing inventory ticket id. Open this page from Inventory.");
       return;
     }
     els.editTicketLink.href = `./inventory.html?edit=${encodeURIComponent(state.ticketId)}`;
-    if (!state.supabase.enabled) {
-      showError("Add Supabase URL and anon key in supabase-config.js.");
-      setCloudStatus("Supabase not configured", "error");
+    if (!state.apiEnabled) {
+      showError("TMS API is unavailable.");
+      setCloudStatus("TMS API unavailable", "error");
       return;
     }
     await loadTicket();
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadTicket() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const [ticketRows, shipmentRows] = await Promise.all([
-        supabaseRequest(`${TABLE}?id=eq.${encodeURIComponent(state.ticketId)}&select=*&limit=1`),
-        supabaseRequest(`${SHIPMENT_TABLE}?inventory_ticket_id=eq.${encodeURIComponent(state.ticketId)}&select=*&order=created_at.asc`),
+        apiRequest(`${TABLE}?id=eq.${encodeURIComponent(state.ticketId)}&select=*&limit=1`),
+        apiRequest(`${SHIPMENT_TABLE}?inventory_ticket_id=eq.${encodeURIComponent(state.ticketId)}&select=*&order=created_at.asc`),
       ]);
       if (!ticketRows.length) {
-        showError("Inventory ticket not found in Supabase.");
+        showError("Inventory ticket not found in TMS API.");
         setCloudStatus("Not found", "error");
         return;
       }
@@ -103,7 +100,7 @@
     state.tripPlan = null;
     if (!tripPlanId) return;
     try {
-      const rows = await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(tripPlanId)}&select=id,plan_name,plan_type,execution_status,control_status,etd_date&limit=1`);
+      const rows = await apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(tripPlanId)}&select=id,plan_name,plan_type,execution_status,control_status,etd_date&limit=1`);
       state.tripPlan = rows.length ? normalizeTripPlan(rows[0]) : null;
     } catch (error) {
       console.warn(error);
@@ -170,15 +167,8 @@
     `).join("");
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: { apikey: state.supabase.key, Authorization: `Bearer ${state.supabase.key}`, "Content-Type": "application/json", ...(options.headers || {}) },
-    });
-    if (!response.ok) throw new Error(await response.text() || `Supabase request failed: ${response.status}`);
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function normalizeTicket(row, shipments) {

@@ -7,7 +7,6 @@
   const INVENTORY_TABLE = "inventory_tickets";
   const DOCUMENT_TABLE = "business_documents";
   const CARRIER_BILLS_TABLE = "carrier_bills";
-  const DOCUMENT_BUCKET = "business-documents";
   const EXECUTION_STATUSES = ["Planned", "Scheduled", "Pending", "Loading", "In Transit", "Delivered"];
   const CONTROL_STATUSES = ["Active", "At Risk", "Cancelled", "Locked"];
   const LOAD_TYPES = [
@@ -117,7 +116,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     planId: "",
     plan: null,
     selectedStage: "planned",
@@ -140,7 +139,7 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     bindEvents();
     state.planId = new URLSearchParams(window.location.search).get("id") || "";
     if (!state.planId) {
@@ -148,9 +147,9 @@
       return;
     }
     els.editPlanLink.href = `./create-trip-plans.html?edit=${encodeURIComponent(state.planId)}`;
-    if (!state.supabase.enabled) {
-      showError("Add Supabase URL and anon key in supabase-config.js.");
-      setCloudStatus("Supabase not configured", "error");
+    if (!state.apiEnabled) {
+      showError("TMS API is unavailable.");
+      setCloudStatus("TMS API unavailable", "error");
       return;
     }
     await loadPlan();
@@ -207,19 +206,16 @@
     }));
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadPlan() {
     try {
-      setCloudStatus("Loading Supabase", "");
-      const rows = await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}&select=*&limit=1`);
+      setCloudStatus("Loading TMS data", "");
+      const rows = await apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}&select=*&limit=1`);
       if (!rows.length) {
-        showError("Trip plan not found in Supabase.");
+        showError("Trip plan not found in TMS API.");
         setCloudStatus("Not found", "error");
         return;
       }
@@ -246,7 +242,7 @@
 
   async function loadDocuments() {
     try {
-      state.documents = await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.trip_plan&entity_id=eq.${encodeURIComponent(state.planId)}&document_status=eq.active&select=*&order=updated_at.desc`);
+      state.documents = await apiRequest(`${DOCUMENT_TABLE}?entity_type=eq.trip_plan&entity_id=eq.${encodeURIComponent(state.planId)}&document_status=eq.active&select=*&order=updated_at.desc`);
     } catch (error) {
       state.documents = [];
     }
@@ -254,7 +250,7 @@
 
   async function loadCarrierBills() {
     try {
-      state.carrierBills = await supabaseRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=*&order=updated_at.desc`);
+      state.carrierBills = await apiRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=*&order=updated_at.desc`);
     } catch (error) {
       state.carrierBills = [];
     }
@@ -262,7 +258,7 @@
 
   async function loadInventoryTickets() {
     try {
-      state.inventoryTickets = await supabaseRequest(`${INVENTORY_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=id,trip_plan_id,inventory_ticket_no,inventory_status,fc,product_name,updated_at&order=updated_at.desc`);
+      state.inventoryTickets = await apiRequest(`${INVENTORY_TABLE}?trip_plan_id=eq.${encodeURIComponent(state.planId)}&select=id,trip_plan_id,inventory_ticket_no,inventory_status,fc,product_name,updated_at&order=updated_at.desc`);
     } catch (error) {
       state.inventoryTickets = [];
     }
@@ -270,12 +266,12 @@
 
   async function loadStageResources() {
     const [fleetItems, fleetAssignments, dockItems, dockAssignments, crewItems, crewAssignments] = await Promise.all([
-      supabaseRequest(`${RESOURCE_ENDPOINTS.fleet.resourceTable}?select=*`),
-      supabaseRequest(`${RESOURCE_ENDPOINTS.fleet.assignmentTable}?select=*&order=created_at.desc`),
-      supabaseRequest(`${RESOURCE_ENDPOINTS.dock.resourceTable}?select=*`),
-      supabaseRequest(`${RESOURCE_ENDPOINTS.dock.assignmentTable}?select=*&order=created_at.desc`),
-      supabaseRequest(`${RESOURCE_ENDPOINTS.crew.resourceTable}?select=*`),
-      supabaseRequest(`${RESOURCE_ENDPOINTS.crew.assignmentTable}?select=*&order=created_at.desc`),
+      apiRequest(`${RESOURCE_ENDPOINTS.fleet.resourceTable}?select=*`),
+      apiRequest(`${RESOURCE_ENDPOINTS.fleet.assignmentTable}?select=*&order=created_at.desc`),
+      apiRequest(`${RESOURCE_ENDPOINTS.dock.resourceTable}?select=*`),
+      apiRequest(`${RESOURCE_ENDPOINTS.dock.assignmentTable}?select=*&order=created_at.desc`),
+      apiRequest(`${RESOURCE_ENDPOINTS.crew.resourceTable}?select=*`),
+      apiRequest(`${RESOURCE_ENDPOINTS.crew.assignmentTable}?select=*&order=created_at.desc`),
     ]);
     state.resources = {
       fleet: { items: fleetItems, assignments: fleetAssignments },
@@ -288,8 +284,8 @@
   async function loadRouteReferenceData() {
     try {
       const [appointments, fcs] = await Promise.all([
-        supabaseRequest(`${APPOINTMENTS_TABLE}?select=isa,fc,schedule_time_raw,load_type`),
-        supabaseRequest(`${FC_TABLE}?select=fc,latitude,longitude,city,state,address`),
+        apiRequest(`${APPOINTMENTS_TABLE}?select=isa,fc,schedule_time_raw,load_type`),
+        apiRequest(`${FC_TABLE}?select=fc,latitude,longitude,city,state,address`),
       ]);
       state.appointmentsByIsa = new Map(appointments.map((appointment) => [clean(appointment.isa), appointment]));
       state.fcsByCode = new Map(fcs.map((fc) => [clean(fc.fc), fc]));
@@ -1091,7 +1087,7 @@
         <article class="requirement-item">
           <span class="todo-chip">Setup needed</span>
           <strong>${escapeHtml(title)}</strong>
-          <span>Run sql/supabase-resources-schema.sql to enable this resource table.</span>
+          <span>Run sql/api-resources-schema.sql to enable this resource table.</span>
         </article>
       `;
     }
@@ -1406,7 +1402,7 @@
         body.work_date = crewWorkDate;
         body.task_slot = crewSlot;
       }
-      await supabaseRequest(config.assignmentTable, {
+      await apiRequest(config.assignmentTable, {
         method: "POST",
         headers: { Prefer: "return=representation" },
         body: JSON.stringify(body),
@@ -1463,7 +1459,7 @@
       setCloudStatus("Departing vehicle", "");
       await Promise.all([
         ...releaseRequests,
-        supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}`, {
+        apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify({
@@ -1507,7 +1503,7 @@
     };
     const changeLog = [...state.plan.changeLog, logEntry];
     const requests = [
-      supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}`, {
+      apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.planId)}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({
@@ -1580,7 +1576,7 @@
   async function ensureDraftCarrierBill() {
     await loadCarrierBills();
     if (state.carrierBills.length) return;
-    await supabaseRequest(CARRIER_BILLS_TABLE, {
+    await apiRequest(CARRIER_BILLS_TABLE, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -1607,7 +1603,7 @@
 
   function patchResourceAssignment(type, assignmentId, status, timestamp) {
     const config = RESOURCE_ENDPOINTS[type];
-    return supabaseRequest(`${config.assignmentTable}?id=eq.${encodeURIComponent(assignmentId)}`, {
+    return apiRequest(`${config.assignmentTable}?id=eq.${encodeURIComponent(assignmentId)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -1675,23 +1671,35 @@
       setCloudStatus("POD upload accepts PDF, PNG, JPG, or JPEG.", "error");
       return;
     }
-    const storagePath = `trip-plans/${state.planId}/pod/${Date.now()}-${safeFilePart(file.name)}`;
     try {
       setCloudStatus("Uploading POD", "");
-      await uploadStorageObject(storagePath, file);
-      const fileUrl = `${state.supabase.url}/storage/v1/object/public/${DOCUMENT_BUCKET}/${storagePath}`;
-      await saveDocumentMetadata({
-        entity_type: "trip_plan",
-        entity_id: state.planId,
-        document_type: "pod",
-        document_status: "active",
-        file_name: file.name,
-        file_url: fileUrl,
-        storage_path: storagePath,
-        mime_type: file.type,
-        source: "uploaded",
-        updated_at: new Date().toISOString(),
+      const uploaded = await window.TmsApi.uploadDocument({
+        entityType: "trip_plan",
+        entityId: state.planId,
+        documentType: "pod",
+        file,
       });
+      try {
+        await saveDocumentMetadata({
+          entity_type: "trip_plan",
+          entity_id: state.planId,
+          document_type: "pod",
+          document_status: "active",
+          file_name: uploaded.fileName || file.name,
+          file_url: uploaded.fileUrl,
+          storage_path: uploaded.storagePath,
+          mime_type: uploaded.mimeType || file.type,
+          source: "uploaded",
+          updated_at: new Date().toISOString(),
+        });
+      } catch (metadataError) {
+        try {
+          await window.TmsApi.deleteDocument(uploaded.storagePath);
+        } catch (cleanupError) {
+          console.warn("Uploaded POD cleanup failed.", cleanupError);
+        }
+        throw metadataError;
+      }
       await loadDocuments();
       setCloudStatus("POD uploaded", "connected");
       render();
@@ -1700,26 +1708,9 @@
     }
   }
 
-  async function uploadStorageObject(storagePath, file) {
-    const response = await fetch(`${state.supabase.url}/storage/v1/object/${DOCUMENT_BUCKET}/${storagePath}`, {
-      method: "PUT",
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": file.type || "application/octet-stream",
-        "x-upsert": "true",
-      },
-      body: file,
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Storage upload failed: ${response.status}`);
-    }
-  }
-
   async function saveDocumentMetadata(payload) {
     await replaceExistingDocuments(payload.entity_type, payload.entity_id, payload.document_type);
-    await supabaseRequest(DOCUMENT_TABLE, {
+    await apiRequest(DOCUMENT_TABLE, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify(payload),
@@ -1727,7 +1718,7 @@
   }
 
   async function replaceExistingDocuments(entityType, entityId, documentType) {
-    await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.${encodeURIComponent(entityType)}&entity_id=eq.${encodeURIComponent(entityId)}&document_type=eq.${encodeURIComponent(documentType)}&document_status=eq.active`, {
+    await apiRequest(`${DOCUMENT_TABLE}?entity_type=eq.${encodeURIComponent(entityType)}&entity_id=eq.${encodeURIComponent(entityId)}&document_type=eq.${encodeURIComponent(documentType)}&document_status=eq.active`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -1820,23 +1811,8 @@
     return message;
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function setCloudStatus(message, type) {

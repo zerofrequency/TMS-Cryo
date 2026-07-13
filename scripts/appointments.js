@@ -1,7 +1,7 @@
 const DB_NAME = "carrier-appt-manager";
 const DB_VERSION = 1;
 const RECORD_STORE = "appointments";
-const SUPABASE_TABLE = "appointments";
+const APPOINTMENTS_TABLE = "appointments";
 const TRIP_TABLE = "trip_plans";
 const FC_TABLE = "fba_fcs";
 const FC_ROUTE_CACHE_TABLE = "fba_fc_route_cache";
@@ -13,11 +13,7 @@ const CONTINENTAL_US_CAMERA = { center: [-98.5795, 39.8283], zoom: 3.25, pitch: 
 const state = {
   records: [],
   lastImportChanges: [],
-  supabase: {
-    url: "",
-    key: "",
-    enabled: false,
-  },
+  apiEnabled: false,
   selectedKey: null,
   viewMode: "table",
   timelineAutoScrollPending: false,
@@ -150,7 +146,7 @@ const els = {
 async function boot() {
   renderLoadTypeOptions(els.detailLoadType, "Unassigned");
   renderLoadTypeOptions(els.manualLoadType, "Unassigned");
-  loadSupabaseConfig();
+  loadApiConfig();
   await loadRecords();
   bindEvents();
   render();
@@ -229,10 +225,10 @@ function bindEvents() {
 }
 
 async function loadRecords() {
-  if (state.supabase.enabled) {
+  if (state.apiEnabled) {
     try {
       const [records, tripPlansByIsa, fcsByCode] = await Promise.all([
-        loadRecordsFromSupabase(),
+        loadRecordsFromApi(),
         loadTripPlansByIsa(),
         loadFcsByCode(),
       ]);
@@ -240,19 +236,19 @@ async function loadRecords() {
       state.tripPlansByIsa = tripPlansByIsa;
       state.fcsByCode = fcsByCode;
       await saveRecordsToDb(state.records);
-      setImportStatus("Loaded from Supabase. Changes are synced to cloud.");
+      setImportStatus("Loaded from TMS API. Changes are synced to the server.");
       updateCloudStatus("Connected");
       return;
     } catch (error) {
-      console.error("Supabase load failed.", error);
-      setImportStatus(`Supabase load failed: ${error.message}. Loaded local backup instead.`);
+      console.error("TMS API load failed.", error);
+      setImportStatus(`TMS API load failed: ${error.message}. Loaded local backup instead.`);
       updateCloudStatus("Cloud error");
     }
   }
 
   try {
     state.records = await loadRecordsFromDb();
-    setImportStatus("Loaded from local IndexedDB. Configure Supabase for multi-device sync.");
+    setImportStatus("Loaded from local IndexedDB. Configure the TMS API for server sync.");
   } catch (error) {
     console.error("IndexedDB unavailable.", error);
     state.records = [];
@@ -261,16 +257,16 @@ async function loadRecords() {
 }
 
 async function saveRecords() {
-  if (state.supabase.enabled) {
+  if (state.apiEnabled) {
     try {
-      await upsertRecordsToSupabase(state.records);
+      await upsertRecordsToApi(state.records);
       await saveRecordsToDb(state.records);
-      setImportStatus("Saved to Supabase.");
+      setImportStatus("Saved to TMS API.");
       updateCloudStatus("Connected");
       return;
     } catch (error) {
-      console.error("Supabase save failed.", error);
-      setImportStatus(`Supabase save failed: ${error.message}. Saved local backup only.`);
+      console.error("TMS API save failed.", error);
+      setImportStatus(`TMS API save failed: ${error.message}. Saved local backup only.`);
       updateCloudStatus("Cloud error");
     }
   }
@@ -284,93 +280,50 @@ async function saveRecords() {
   }
 }
 
-function loadSupabaseConfig() {
-  const config = window.CARRIER_APPT_SUPABASE || {};
-  state.supabase.url = clean(config.url).replace(/\/+$/, "");
-  state.supabase.key = clean(config.anonKey || config.key);
-  state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
-  updateCloudStatus(state.supabase.enabled ? "Configured from file" : "Local mode");
+function loadApiConfig() {
+  state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
+  updateCloudStatus(state.apiEnabled ? "Configured from file" : "Local mode");
 }
 
-async function syncSupabaseNow() {
-  if (!state.supabase.enabled) return;
+async function syncApiNow() {
+  if (!state.apiEnabled) return;
 
   try {
-    setImportStatus("Syncing with Supabase...");
-    const remoteRecords = await loadRecordsFromSupabase();
+    setImportStatus("Syncing with TMS API...");
+    const remoteRecords = await loadRecordsFromApi();
     const remoteResult = mergeRecords(remoteRecords);
-    await upsertRecordsToSupabase(state.records);
+    await upsertRecordsToApi(state.records);
     await saveRecordsToDb(state.records);
     state.lastImportChanges = remoteResult.changes;
-    setImportStatus(`Synced with Supabase. Pulled ${remoteResult.added} new, updated ${remoteResult.updated}.`);
+    setImportStatus(`Synced with TMS API. Pulled ${remoteResult.added} new, updated ${remoteResult.updated}.`);
     updateCloudStatus("Connected");
     render();
   } catch (error) {
     console.error(error);
-    setImportStatus(`Supabase sync failed: ${error.message}`);
+    setImportStatus(`TMS API sync failed: ${error.message}`);
     updateCloudStatus("Cloud error");
   }
 }
 
 function updateCloudStatus(message) {
-  console.info(state.supabase.enabled ? `Supabase: ${message}` : message);
+  console.info(state.apiEnabled ? `TMS API: ${message}` : message);
 }
 
-function supabaseHeaders(extra = {}) {
-  const headers = {
-    apikey: state.supabase.key,
-    "Content-Type": "application/json",
-    ...extra,
-  };
-  if (state.supabase.key.startsWith("eyJ")) {
-    headers.Authorization = `Bearer ${state.supabase.key}`;
-  }
-  return headers;
+function apiRequest(path, options = {}) {
+  return window.TmsApi.request(`${APPOINTMENTS_TABLE}${path}`, options);
 }
 
-function supabaseEndpoint(query = "") {
-  return `${state.supabase.url}/rest/v1/${SUPABASE_TABLE}${query}`;
+function apiTableRequest(table, path, options = {}) {
+  return window.TmsApi.request(`${table}${path}`, options);
 }
 
-function supabaseTableEndpoint(table, query = "") {
-  return `${state.supabase.url}/rest/v1/${table}${query}`;
-}
-
-async function supabaseRequest(path, options = {}) {
-  const response = await fetch(supabaseEndpoint(path), {
-    ...options,
-    headers: supabaseHeaders(options.headers || {}),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `${response.status} ${response.statusText}`);
-  }
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
-
-async function supabaseTableRequest(table, path, options = {}) {
-  const response = await fetch(supabaseTableEndpoint(table, path), {
-    ...options,
-    headers: supabaseHeaders(options.headers || {}),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `${response.status} ${response.statusText}`);
-  }
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
-
-async function loadRecordsFromSupabase() {
-  const rows = await supabaseRequest("?select=*&order=schedule_time_raw.asc", { method: "GET" });
-  return (rows || []).map(recordFromSupabaseRow);
+async function loadRecordsFromApi() {
+  const rows = await apiRequest("?select=*&order=schedule_time_raw.asc", { method: "GET" });
+  return (rows || []).map(recordFromApiRow);
 }
 
 async function loadTripPlansByIsa() {
-  const rows = await supabaseTableRequest(TRIP_TABLE, "?select=*&order=etd_at.desc", { method: "GET" });
+  const rows = await apiTableRequest(TRIP_TABLE, "?select=*&order=etd_at.desc", { method: "GET" });
   const byIsa = new Map();
   (rows || []).forEach((row) => {
     const executionStatus = normalizeExecutionStatus(row);
@@ -398,10 +351,10 @@ async function loadTripPlansByIsa() {
 }
 
 async function loadFcsByCode() {
-  const fcRows = await supabaseTableRequest(FC_TABLE, "?select=fc,address,city,state,latitude,longitude,legal_transit_hours,transit_days", { method: "GET" });
+  const fcRows = await apiTableRequest(FC_TABLE, "?select=fc,address,city,state,latitude,longitude,legal_transit_hours,transit_days", { method: "GET" });
   let routeRows = [];
   try {
-    routeRows = await supabaseTableRequest(FC_ROUTE_CACHE_TABLE, "?select=fc,distance_miles", { method: "GET" });
+    routeRows = await apiTableRequest(FC_ROUTE_CACHE_TABLE, "?select=fc,distance_miles", { method: "GET" });
   } catch (error) {
     console.warn("Route cache distance load failed.", error);
   }
@@ -412,12 +365,12 @@ async function loadFcsByCode() {
   }));
 }
 
-async function upsertRecordsToSupabase(records) {
+async function upsertRecordsToApi(records) {
   const rows = records
     .filter((record) => clean(record.appointmentId))
-    .map(recordToSupabaseRow);
+    .map(recordToApiRow);
   if (!rows.length) return;
-  await supabaseRequest("?on_conflict=isa", {
+  await apiRequest("?on_conflict=isa", {
     method: "POST",
     headers: {
       Prefer: "resolution=merge-duplicates",
@@ -426,12 +379,12 @@ async function upsertRecordsToSupabase(records) {
   });
 }
 
-async function deleteRecordFromSupabase(record) {
-  if (!state.supabase.enabled || !record.appointmentId) return;
-  await supabaseRequest(`?isa=eq.${encodeURIComponent(record.appointmentId)}`, { method: "DELETE" });
+async function deleteRecordFromApi(record) {
+  if (!state.apiEnabled || !record.appointmentId) return;
+  await apiRequest(`?isa=eq.${encodeURIComponent(record.appointmentId)}`, { method: "DELETE" });
 }
 
-function recordToSupabaseRow(record) {
+function recordToApiRow(record) {
   return {
     isa: clean(record.appointmentId),
     fc: clean(record.fc),
@@ -450,7 +403,7 @@ function recordToSupabaseRow(record) {
   };
 }
 
-function recordFromSupabaseRow(row) {
+function recordFromApiRow(row) {
   const record = {
     fc: clean(row.fc),
     appointmentId: clean(row.isa),
@@ -532,7 +485,7 @@ async function handleFileUpload(event) {
     const result = mergeRecords(records);
     await saveRecords();
     state.lastImportChanges = result.changes;
-    setImportStatus(`Imported ${result.added} new, updated ${result.updated} from ${file.name}. Records are saved ${state.supabase.enabled ? "to Supabase" : "locally"}.`);
+    setImportStatus(`Imported ${result.added} new, updated ${result.updated} from ${file.name}. Records are saved ${state.apiEnabled ? "to the TMS API" : "locally"}.`);
     render();
     openImportSummaryModal(result, file.name);
   } catch (error) {
@@ -2203,10 +2156,10 @@ async function deleteSelectedRecord() {
   const record = getSelectedRecord();
   if (!record) return;
   try {
-    await deleteRecordFromSupabase(record);
+    await deleteRecordFromApi(record);
   } catch (error) {
     console.error(error);
-    setImportStatus(`Supabase delete failed: ${error.message}`);
+    setImportStatus(`TMS API delete failed: ${error.message}`);
     return;
   }
   state.records = state.records.filter((item) => item.key !== record.key);

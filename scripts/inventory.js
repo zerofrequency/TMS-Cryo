@@ -70,7 +70,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     tickets: [],
     tripPlans: [],
     selectedId: "",
@@ -82,11 +82,11 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     fillStatusOptions();
     bindEvents();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       render();
       return;
     }
@@ -154,11 +154,8 @@
     });
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   function fillStatusOptions() {
@@ -180,7 +177,7 @@
 
   async function loadTripPlans() {
     try {
-      const rows = await supabaseRequest(`${TRIP_TABLE}?select=id,plan_name,plan_type,execution_status,control_status,etd_date&order=updated_at.desc`);
+      const rows = await apiRequest(`${TRIP_TABLE}?select=id,plan_name,plan_type,execution_status,control_status,etd_date&order=updated_at.desc`);
       state.tripPlans = rows.map(normalizeTripPlan);
       fillTripPlanOptions();
     } catch (error) {
@@ -196,10 +193,10 @@
 
   async function loadTickets() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const [ticketRows, shipmentRows] = await Promise.all([
-        supabaseRequest(`${TABLE}?select=*&order=updated_at.desc`),
-        supabaseRequest(`${SHIPMENT_TABLE}?select=*&order=created_at.asc`),
+        apiRequest(`${TABLE}?select=*&order=updated_at.desc`),
+        apiRequest(`${SHIPMENT_TABLE}?select=*&order=created_at.asc`),
       ]);
       const shipmentsByTicket = new Map();
       shipmentRows.forEach((row) => {
@@ -435,7 +432,7 @@
 
   async function saveTicket(event) {
     event.preventDefault();
-    if (!state.supabase.enabled) return setFormMessage("Supabase is not configured.", "error");
+    if (!state.apiEnabled) return setFormMessage("TMS API is unavailable.", "error");
     const payload = formPayload();
     const shipmentRows = collectShipmentRows();
     const validation = validatePayload(payload, shipmentRows);
@@ -450,13 +447,13 @@
       setCloudStatus("Saving ticket", "");
       let ticketId = existing?.id || "";
       if (existing) {
-        await supabaseRequest(`${TABLE}?id=eq.${encodeURIComponent(existing.id)}`, {
+        await apiRequest(`${TABLE}?id=eq.${encodeURIComponent(existing.id)}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify(payload),
         });
       } else {
-        const rows = await supabaseRequest(TABLE, {
+        const rows = await apiRequest(TABLE, {
           method: "POST",
           headers: { Prefer: "return=representation" },
           body: JSON.stringify(payload),
@@ -476,12 +473,12 @@
   }
 
   async function syncShipmentRows(ticketId, rows) {
-    await supabaseRequest(`${SHIPMENT_TABLE}?inventory_ticket_id=eq.${encodeURIComponent(ticketId)}`, {
+    await apiRequest(`${SHIPMENT_TABLE}?inventory_ticket_id=eq.${encodeURIComponent(ticketId)}`, {
       method: "DELETE",
       headers: { Prefer: "return=minimal" },
     });
     if (!rows.length) return;
-    await supabaseRequest(SHIPMENT_TABLE, {
+    await apiRequest(SHIPMENT_TABLE, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify(rows.map((row) => ({ ...row, inventory_ticket_id: ticketId, updated_at: new Date().toISOString() }))),
@@ -581,15 +578,8 @@
     URL.revokeObjectURL(url);
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: { apikey: state.supabase.key, Authorization: `Bearer ${state.supabase.key}`, "Content-Type": "application/json", ...(options.headers || {}) },
-    });
-    if (!response.ok) throw new Error(await response.text() || `Supabase request failed: ${response.status}`);
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function normalizeTicket(row, shipments) {

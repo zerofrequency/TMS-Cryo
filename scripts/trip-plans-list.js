@@ -38,7 +38,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     plans: [],
     selectedId: "",
     refreshTimer: null,
@@ -47,11 +47,11 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     bindEvents();
     fillStatusFilters();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       render();
       return;
     }
@@ -86,17 +86,14 @@
     state.refreshTimer = window.setInterval(render, 60000);
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadPlans() {
     try {
-      setCloudStatus("Loading Supabase", "");
-      const rows = await supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
+      setCloudStatus("Loading TMS data", "");
+      const rows = await apiRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
       state.plans = rows.map(normalizePlan);
       fillTypeFilter();
       if (!state.selectedId && state.plans.length) state.selectedId = state.plans[0].id;
@@ -373,7 +370,7 @@
   }
 
   async function updatePlanStatus(planId, field, nextStatus) {
-    if (!state.supabase.enabled || !planId) return;
+    if (!state.apiEnabled || !planId) return;
     const plan = state.plans.find((item) => item.id === planId);
     const currentStatus = field === "control_status" ? plan?.controlStatus : plan?.executionStatus;
     if (!plan || currentStatus === nextStatus) return;
@@ -400,7 +397,7 @@
     const changeLog = [...plan.changeLog, logEntry];
     try {
       setCloudStatus("Updating status", "");
-      await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(planId)}`, {
+      await apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(planId)}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({
@@ -461,9 +458,9 @@
   }
 
   async function ensureDraftCarrierBill(plan) {
-    const existing = await supabaseRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(plan.id)}&select=id,billing_status&limit=1`);
+    const existing = await apiRequest(`${CARRIER_BILLS_TABLE}?trip_plan_id=eq.${encodeURIComponent(plan.id)}&select=id,billing_status&limit=1`);
     if (existing.length) return;
-    await supabaseRequest(CARRIER_BILLS_TABLE, {
+    await apiRequest(CARRIER_BILLS_TABLE, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -476,23 +473,8 @@
     });
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function setCloudStatus(message, type) {

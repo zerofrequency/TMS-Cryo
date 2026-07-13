@@ -47,7 +47,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     resources: { fleet: [], dock: [], crew: [] },
     assignments: { fleet: [], dock: [], crew: [] },
     tripPlans: [],
@@ -57,7 +57,7 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     els.refreshButton.addEventListener("click", loadAll);
     els.viewTabs.forEach((tab) => {
       tab.addEventListener("click", () => {
@@ -65,24 +65,21 @@
         render();
       });
     });
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       render();
       return;
     }
     await loadAll();
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadAll() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const [
         fleetResources,
         fleetAssignments,
@@ -92,13 +89,13 @@
         crewAssignments,
         tripPlans,
       ] = await Promise.all([
-        supabaseRequest(`${RESOURCE_TYPES.fleet.baseTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${RESOURCE_TYPES.fleet.assignmentTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${RESOURCE_TYPES.dock.baseTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${RESOURCE_TYPES.dock.assignmentTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${RESOURCE_TYPES.crew.baseTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${RESOURCE_TYPES.crew.assignmentTable}?select=*&order=created_at.desc`),
-        supabaseRequest(`${TRIP_TABLE}?select=id,plan_name,plan_type,plan_status,etd_date,etd_period,stops&order=etd_at.asc`),
+        apiRequest(`${RESOURCE_TYPES.fleet.baseTable}?select=*&order=created_at.desc`),
+        apiRequest(`${RESOURCE_TYPES.fleet.assignmentTable}?select=*&order=created_at.desc`),
+        apiRequest(`${RESOURCE_TYPES.dock.baseTable}?select=*&order=created_at.desc`),
+        apiRequest(`${RESOURCE_TYPES.dock.assignmentTable}?select=*&order=created_at.desc`),
+        apiRequest(`${RESOURCE_TYPES.crew.baseTable}?select=*&order=created_at.desc`),
+        apiRequest(`${RESOURCE_TYPES.crew.assignmentTable}?select=*&order=created_at.desc`),
+        apiRequest(`${TRIP_TABLE}?select=id,plan_name,plan_type,plan_status,etd_date,etd_period,stops&order=etd_at.asc`),
       ]);
       state.resources.fleet = fleetResources;
       state.assignments.fleet = fleetAssignments;
@@ -500,23 +497,8 @@
     return String(value).padStart(2, "0");
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function setCloudStatus(message, type) {

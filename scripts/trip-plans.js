@@ -31,7 +31,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     appointments: [],
     fcs: new Map(),
     plans: [],
@@ -58,15 +58,15 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     state.editingPlanId = new URLSearchParams(window.location.search).get("edit") || "";
     bindEvents();
     const today = new Date().toISOString().slice(0, 10);
     els.planDate.value = today;
     els.etaDate.value = today;
     renderStops();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       renderAppointmentCalendar();
       return;
     }
@@ -99,19 +99,16 @@
     });
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   async function loadData() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const [appointments, fcs] = await Promise.all([
-        supabaseRequest(`${APPOINTMENTS_TABLE}?select=*&order=schedule_time_raw.asc`),
-        supabaseRequest(`${FC_TABLE}?select=*`),
+        apiRequest(`${APPOINTMENTS_TABLE}?select=*&order=schedule_time_raw.asc`),
+        apiRequest(`${FC_TABLE}?select=*`),
       ]);
       state.appointments = appointments.map(recordFromAppointmentRow).filter((appt) => appt.isa);
       state.fcs = new Map(fcs.map((fc) => [clean(fc.fc), fc]));
@@ -127,9 +124,9 @@
   }
 
   async function loadPlans() {
-    if (!state.supabase.enabled) return;
+    if (!state.apiEnabled) return;
     try {
-      state.plans = await supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
+      state.plans = await apiRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`);
       applyEditPlanFromUrl();
       renderAppointmentCalendar();
     } catch (error) {
@@ -270,8 +267,8 @@
 
   async function saveTripPlan(event) {
     event.preventDefault();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Supabase is required for trip plans", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is required for trip plans", "error");
       return;
     }
     const stops = collectStops();
@@ -314,7 +311,7 @@
 
     try {
       if (state.editingPlanId) {
-        await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.editingPlanId)}`, {
+        await apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(state.editingPlanId)}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify(payload),
@@ -322,7 +319,7 @@
         await syncIsaBindings(state.editingPlanId, stops, payload.control_status);
         setCloudStatus("Trip plan updated", "connected");
       } else {
-        const inserted = await supabaseRequest(TRIP_TABLE, {
+        const inserted = await apiRequest(TRIP_TABLE, {
           method: "POST",
           headers: { Prefer: "return=representation" },
           body: JSON.stringify(payload),
@@ -380,7 +377,7 @@
   }
 
   async function syncIsaBindings(planId, stops, planStatus) {
-    if (!state.supabase.enabled || !planId) return;
+    if (!state.apiEnabled || !planId) return;
     if (normalizeControlStatus({ control_status: planStatus, plan_status: planStatus }) === "Cancelled") return;
 
     const desiredIsas = compactUnique((Array.isArray(stops) ? stops : [])
@@ -388,14 +385,14 @@
       .map((stop) => clean(stop.isa))
       .filter(Boolean));
 
-    const existing = await supabaseRequest(`${BINDINGS_TABLE}?trip_plan_id=eq.${encodeURIComponent(planId)}&select=*`);
+    const existing = await apiRequest(`${BINDINGS_TABLE}?trip_plan_id=eq.${encodeURIComponent(planId)}&select=*`);
     const byIsa = new Map(existing.map((row) => [clean(row.isa), row]));
 
     const toReleaseRows = existing.filter((row) => (
       clean(row.binding_status) === "active" && !desiredIsas.includes(clean(row.isa))
     ));
     for (const row of toReleaseRows) {
-      await supabaseRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
+      await apiRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
         method: "PATCH",
         headers: { Prefer: "return=minimal" },
         body: JSON.stringify({ binding_status: "released", updated_at: new Date().toISOString() }),
@@ -406,7 +403,7 @@
       const row = byIsa.get(isa);
       if (row) {
         if (clean(row.binding_status) !== "active") {
-          await supabaseRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
+          await apiRequest(`${BINDINGS_TABLE}?id=eq.${encodeURIComponent(row.id)}`, {
             method: "PATCH",
             headers: { Prefer: "return=minimal" },
             body: JSON.stringify({ binding_status: "active", updated_at: new Date().toISOString() }),
@@ -415,7 +412,7 @@
         continue;
       }
       try {
-        await supabaseRequest(BINDINGS_TABLE, {
+        await apiRequest(BINDINGS_TABLE, {
           method: "POST",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify({ isa, trip_plan_id: planId, binding_status: "active", updated_at: new Date().toISOString() }),
@@ -916,23 +913,8 @@
     return state.appointments.find((appt) => appt.isa === isa);
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function setCloudStatus(message, type) {

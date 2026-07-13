@@ -57,7 +57,7 @@
   };
 
   const state = {
-    supabase: { url: "", key: "", enabled: false },
+    apiEnabled: false,
     bills: [],
     plans: [],
     documents: [],
@@ -69,11 +69,11 @@
   boot();
 
   async function boot() {
-    loadSupabaseConfig();
+    loadApiConfig();
     bindEvents();
     fillStaticOptions();
-    if (!state.supabase.enabled) {
-      setCloudStatus("Add anon key in supabase-config.js", "error");
+    if (!state.apiEnabled) {
+      setCloudStatus("TMS API is unavailable", "error");
       render();
       return;
     }
@@ -127,11 +127,8 @@
     FEE_FIELDS.forEach(([id]) => document.getElementById(id).addEventListener("input", updateTotalPreview));
   }
 
-  function loadSupabaseConfig() {
-    const config = window.CARRIER_APPT_SUPABASE || {};
-    state.supabase.url = clean(config.url).replace(/\/+$/, "");
-    state.supabase.key = clean(config.anonKey || config.key);
-    state.supabase.enabled = Boolean(state.supabase.url && state.supabase.key);
+  function loadApiConfig() {
+    state.apiEnabled = Boolean(window.TmsApi && window.TmsApi.isConfigured());
   }
 
   function fillStaticOptions() {
@@ -141,12 +138,12 @@
 
   async function loadData() {
     try {
-      setCloudStatus("Loading Supabase", "");
+      setCloudStatus("Loading TMS data", "");
       const [bills, plans, carrierResources, carrierAssignments] = await Promise.all([
-        supabaseRequest(`${BILL_TABLE}?select=*&order=updated_at.desc`),
-        supabaseRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`),
-        supabaseRequest(`${CARRIER_RESOURCE_TABLE}?select=id,fleet_name`),
-        supabaseRequest(`${CARRIER_ASSIGNMENT_TABLE}?select=*&order=created_at.desc`),
+        apiRequest(`${BILL_TABLE}?select=*&order=updated_at.desc`),
+        apiRequest(`${TRIP_TABLE}?select=*&order=etd_at.desc`),
+        apiRequest(`${CARRIER_RESOURCE_TABLE}?select=id,fleet_name`),
+        apiRequest(`${CARRIER_ASSIGNMENT_TABLE}?select=*&order=created_at.desc`),
       ]);
       const carrierByPlan = buildCarrierByPlan(carrierResources, carrierAssignments);
       state.plans = plans.map((plan) => normalizePlan(plan, carrierByPlan));
@@ -165,7 +162,7 @@
 
   async function loadDocuments() {
     try {
-      state.documents = await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.carrier_bill&document_status=eq.active&select=*&order=updated_at.desc`);
+      state.documents = await apiRequest(`${DOCUMENT_TABLE}?entity_type=eq.carrier_bill&document_status=eq.active&select=*&order=updated_at.desc`);
     } catch (error) {
       state.documents = [];
     }
@@ -445,8 +442,8 @@
 
   async function saveBill(event) {
     event.preventDefault();
-    if (!state.supabase.enabled) {
-      setFormMessage("Supabase is not configured.", "error");
+    if (!state.apiEnabled) {
+      setFormMessage("TMS API is unavailable.", "error");
       return;
     }
     const payload = formPayload();
@@ -468,7 +465,7 @@
       setFormMessage("Saving bill...", "");
       setCloudStatus("Saving bill", "");
       if (existing) {
-        await supabaseRequest(`${BILL_TABLE}?id=eq.${encodeURIComponent(existing.id)}`, {
+        await apiRequest(`${BILL_TABLE}?id=eq.${encodeURIComponent(existing.id)}`, {
           method: "PATCH",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify(payload),
@@ -476,7 +473,7 @@
         state.bills = state.bills.map((bill) => bill.id === existing.id ? normalizeBill({ ...existing.raw, ...payload, id: existing.id }) : bill);
         state.selectedId = existing.id;
       } else {
-        const rows = await supabaseRequest(BILL_TABLE, {
+        const rows = await apiRequest(BILL_TABLE, {
           method: "POST",
           headers: { Prefer: "return=representation" },
           body: JSON.stringify(payload),
@@ -522,7 +519,7 @@
       message: "Carrier bill was paid. Trip plan control status changed to Locked.",
     };
     const changeLog = [...(Array.isArray(plan.changeLog) ? plan.changeLog : []), logEntry];
-    await supabaseRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(plan.id)}`, {
+    await apiRequest(`${TRIP_TABLE}?id=eq.${encodeURIComponent(plan.id)}`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -638,7 +635,7 @@
     const payload = invoicePayload(bill, plan);
     const fileName = `invoice-${safeFilePart(bill.invoiceNumber || bill.id)}.html`;
     try {
-      if (state.supabase.enabled) {
+      if (state.apiEnabled) {
         await saveDocumentMetadata({
           entity_type: "carrier_bill",
           entity_id: bill.id,
@@ -670,7 +667,7 @@
 
   async function saveDocumentMetadata(payload) {
     await replaceExistingDocuments(payload.entity_type, payload.entity_id, payload.document_type);
-    await supabaseRequest(DOCUMENT_TABLE, {
+    await apiRequest(DOCUMENT_TABLE, {
       method: "POST",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify(payload),
@@ -678,7 +675,7 @@
   }
 
   async function replaceExistingDocuments(entityType, entityId, documentType) {
-    await supabaseRequest(`${DOCUMENT_TABLE}?entity_type=eq.${encodeURIComponent(entityType)}&entity_id=eq.${encodeURIComponent(entityId)}&document_type=eq.${encodeURIComponent(documentType)}&document_status=eq.active`, {
+    await apiRequest(`${DOCUMENT_TABLE}?entity_type=eq.${encodeURIComponent(entityType)}&entity_id=eq.${encodeURIComponent(entityId)}&document_type=eq.${encodeURIComponent(documentType)}&document_status=eq.active`, {
       method: "PATCH",
       headers: { Prefer: "return=minimal" },
       body: JSON.stringify({
@@ -794,23 +791,8 @@
     if (carriers.includes(current)) els.carrierFilter.value = current;
   }
 
-  async function supabaseRequest(path, options = {}) {
-    const response = await fetch(`${state.supabase.url}/rest/v1/${path}`, {
-      ...options,
-      headers: {
-        apikey: state.supabase.key,
-        Authorization: `Bearer ${state.supabase.key}`,
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-      },
-    });
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || `Supabase request failed: ${response.status}`);
-    }
-    if (response.status === 204) return [];
-    const text = await response.text();
-    return text ? JSON.parse(text) : [];
+  function apiRequest(path, options = {}) {
+    return window.TmsApi.request(path, options);
   }
 
   function normalizeBill(row) {
