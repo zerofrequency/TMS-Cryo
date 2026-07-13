@@ -84,3 +84,27 @@ Current VPS components:
 - PostgreSQL `tms` database runs on local port `5433`
 
 Runtime secrets and generated credentials live only on the VPS under `/etc/tms/` and must not be committed.
+
+## Development Flow
+
+Keep GitHub as the code source of truth. Do not migrate the canonical Git repository to the VPS.
+
+Recommended flow:
+
+1. Develop locally from `/Users/cryo/Documents/Codex/TMS/TMS-main`.
+2. Verify locally with `npm run dev`.
+3. Commit and push to GitHub `main`.
+4. Deploy to the VPS test environment with `npm run deploy:vps`.
+5. Check the running VPS environment with `npm run check:vps`.
+
+Useful commands:
+
+```sh
+npm run deploy:vps
+npm run backup:vps-db
+npm run check:vps
+```
+
+`npm run deploy:vps` publishes tracked static app files to a new `/var/www/tms/releases/<timestamp>` release and updates `/var/www/tms/current`. It preserves VPS-local `supabase-config.js` and `map-config.js` from the previous current release.
+
+`npm run backup:vps-db` downloads a PostgreSQL custom-format dump from the VPS into `outputs/backups/`, which is ignored by Git.

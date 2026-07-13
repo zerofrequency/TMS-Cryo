@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node scripts/dev-server.mjs"
+    "dev": "node scripts/dev-server.mjs",
+    "deploy:vps": "bash scripts/deploy-vps.sh",
+    "backup:vps-db": "bash scripts/backup-vps-db.sh",
+    "check:vps": "bash scripts/check-vps.sh"
   }
 }

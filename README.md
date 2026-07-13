@@ -32,6 +32,34 @@ Use **Appt** for appointments, **Trip Plans** to review outbound plans, and **Cr
 
 See `docs/LOCAL_DEV_SERVER_GUIDE.md` for the full local testing workflow.
 
+## MVP development and VPS deployment
+
+GitHub remains the code source of truth. Develop locally on the Mac, commit and push to `main`, then deploy the static app to the `vps-sh` test environment.
+
+```sh
+npm run dev
+npm run check:vps
+npm run deploy:vps
+```
+
+The VPS deployment is a test/showcase environment:
+
+- Public URL: `http://tms.zefanlong.space`
+- Static files: `/var/www/tms/current`
+- nginx serves the app on port `80`
+- DERP remains the primary VPS service on HTTPS `443`; do not move DERP for TMS
+- `tms-login.service` handles the simple login page on local port `3100`
+- `tms-postgrest.service` exposes the PostgreSQL REST API on local port `3000`
+- PostgreSQL database `tms` runs locally on port `5433`
+
+Back up the VPS database before risky data or schema work:
+
+```sh
+npm run backup:vps-db
+```
+
+Backups are downloaded under `outputs/backups/`, which is intentionally ignored by Git.
+
 ## Import
 
 Use **Upload CSV/XLSX** and select an Amazon Carrier Central download file. The importer maps:
@@ -54,26 +82,30 @@ Use **Add Manually** to create or update a single appointment by ISA. Manual ent
 
 ## Storage
 
-Records can be synced to Supabase. Copy `supabase-config.example.js` to `supabase-config.js`, then put your Supabase project URL and anon public key in `supabase-config.js`.
+The current deployed MVP uses PostgreSQL on `vps-sh` through PostgREST. The previous Supabase project is retained as a legacy backup, not the primary database.
 
-If Supabase is not configured or unavailable, the app uses local `IndexedDB` as a backup.
+For local browser testing, copy `supabase-config.example.js` to `supabase-config.js`, then point it at the active REST API and public/anon token for the environment you are testing.
 
-CSV/XLSX uploads are merged by ISA and saved to Supabase when `supabase-config.js` has a valid anon key.
+If the REST config is not configured or unavailable, the appointment page can use local `IndexedDB` as a backup.
 
-## Supabase setup
+CSV/XLSX uploads are merged by ISA and saved to the configured REST backend when `supabase-config.js` is valid.
 
-Run `sql/supabase-schema.sql` in the Supabase SQL editor before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data, weekly FC appointment table, and persisted FC route cache table. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans. The current direct-browser setup uses the anon key and an open personal-use RLS policy. Tighten this later when adding Supabase Auth.
+## PostgreSQL schema setup
+
+The SQL files under `sql/` are PostgreSQL schema/migration files. Their names still use the historical `supabase-*` prefix, but the active MVP database is PostgreSQL on `vps-sh`.
+
+Run `sql/supabase-schema.sql` before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data, weekly FC appointment table, and persisted FC route cache table. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans.
 
 Run `sql/supabase-resources-schema.sql` to add Carrier, Dock, and Loading Crew resource tables plus their assignment tables.
 
 Run `sql/supabase-fba-fc-final-data-update-2026-06-02.sql` to reapply the latest 212-row FC address, coordinate, and route-duration update if the `fba_fcs` data needs to be restored. Run `sql/supabase-fba-fc-legal-transit-hours-update-2026-06-02.sql` to add and fill the FMCSA-style `legal_transit_hours` planning estimate.
 
-Create and edit `supabase-config.js`:
+Create and edit local `supabase-config.js` for the API endpoint you are testing:
 
 ```js
 window.CARRIER_APPT_SUPABASE = {
-  url: "https://dilazfiqeqqqpwgocfvw.supabase.co",
-  anonKey: "paste anon public key here",
+  url: "http://127.0.0.1:5173",
+  anonKey: "paste local API token here",
 };
 ```
 
