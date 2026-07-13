@@ -101,7 +101,7 @@
               <button id="timelineViewButton" class="view-button" type="button">Timeline</button>
               <button id="mapViewButton" class="view-button" type="button">Map</button>
             </div>
-            <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Configure Supabase for cloud sync.</div>
+            <div id="importStatus" class="import-status">Upload CSV/XLSX to merge by ISA. Changes sync through the TMS API.</div>
           </div>
           <div id="tableView" class="table-wrap">
             <table>
@@ -270,7 +270,8 @@
       </section>
     </main>
 
-    <script src="./supabase-config.js?v=tms-login-cookie-20260713"></script>
+    <script src="./tms-config.js?v=tms-api-20260713"></script>
+    <script src="./scripts/tms-api.js?v=tms-api-20260713"></script>
     <script src="./map-config.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
     <script src="./scripts/clocks.js"></script>
