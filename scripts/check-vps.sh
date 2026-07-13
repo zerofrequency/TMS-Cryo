@@ -23,14 +23,16 @@ systemctl is-active postgresql@16-main
 
 echo '== ports =='
 ss -ltnup | grep -E "(:80|:443|:3478|:3000|:3100|:3101|:$DB_PORT)" || true
-ss -ltnp | grep -q '127.0.0.1:3000' || { echo 'PostgREST must listen on 127.0.0.1:3000 only'; exit 1; }
-ss -ltnp | grep -q '127.0.0.1:3101' || { echo 'Document service must listen on 127.0.0.1:3101'; exit 1; }
-if ss -ltnp | grep -Eq '(0\.0\.0\.0|\[::\]|\*):3101'; then
+tcp_listeners="$(ss -ltnp)"
+udp_listeners="$(ss -lunp)"
+[[ "$tcp_listeners" == *'127.0.0.1:3000'* ]] || { echo 'PostgREST must listen on 127.0.0.1:3000 only'; exit 1; }
+[[ "$tcp_listeners" == *'127.0.0.1:3101'* ]] || { echo 'Document service must listen on 127.0.0.1:3101'; exit 1; }
+if grep -Eq '(0\.0\.0\.0|\[::\]|\*):3101' <<< "$tcp_listeners"; then
   echo 'Document service must not listen publicly on port 3101'
   exit 1
 fi
-ss -ltnp | grep -q ':443' || { echo 'DERP TCP 443 listener is missing'; exit 1; }
-ss -lunp | grep -q ':3478' || { echo 'DERP UDP 3478 listener is missing'; exit 1; }
+[[ "$tcp_listeners" == *':443'* ]] || { echo 'DERP TCP 443 listener is missing'; exit 1; }
+[[ "$udp_listeners" == *':3478'* ]] || { echo 'DERP UDP 3478 listener is missing'; exit 1; }
 
 echo '== database =='
 pg_lsclusters | sed -n '1,5p'

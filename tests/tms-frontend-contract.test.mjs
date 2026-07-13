@@ -104,3 +104,12 @@ test("PostgreSQL assets and current docs use active TMS naming", async () => {
     }
   }
 });
+
+test("VPS listener checks do not fail under pipefail when grep exits early", async () => {
+  const content = await source("scripts/check-vps.sh");
+
+  assert.match(content, /tcp_listeners="\$\(ss -ltnp\)"/);
+  assert.match(content, /udp_listeners="\$\(ss -lunp\)"/);
+  assert.doesNotMatch(content, /ss -ltnp \| grep -q/);
+  assert.doesNotMatch(content, /ss -lunp \| grep -q/);
+});
