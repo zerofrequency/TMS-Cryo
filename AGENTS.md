@@ -16,6 +16,7 @@ Personal Carrier Appointment Manager / TMS demo for appointments, trip plans, re
 
 ```sh
 npm run dev
+npm test
 ```
 
 Default local URL:

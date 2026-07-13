@@ -38,6 +38,7 @@ GitHub remains the code source of truth. Develop locally on the Mac, commit and 
 
 ```sh
 npm run dev
+npm test
 npm run check:vps
 npm run deploy:vps
 ```
@@ -50,7 +51,9 @@ The VPS deployment is a test/showcase environment:
 - DERP remains the primary VPS service on HTTPS `443`; do not move DERP for TMS
 - `tms-login.service` handles the simple login page on local port `3100`
 - `tms-postgrest.service` exposes the PostgreSQL REST API on `127.0.0.1:3000`
+- `tms-documents.service` stores authenticated POD uploads on `127.0.0.1:3101`
 - PostgreSQL database `tms` runs locally on port `5433`
+- uploaded files live under `/var/lib/tms/documents`
 
 Back up the VPS database before risky data or schema work:
 
@@ -84,11 +87,13 @@ Use **Add Manually** to create or update a single appointment by ISA. Manual ent
 
 The current deployed MVP uses PostgreSQL on `vps-sh` through PostgREST. The previous Supabase project is retained as a legacy backup, not the primary database.
 
-For local browser testing, copy `tms-config.example.js` to `tms-config.js`, then point it at the active REST API and public/anon token for the environment you are testing.
+For local browser testing, copy `tms-config.example.js` to `tms-config.js`, then set an explicit API base and optional generic token only when testing against a non-same-origin PostgREST environment.
 
 If the REST config is not configured or unavailable, the appointment page can use local `IndexedDB` as a backup.
 
 CSV/XLSX uploads are merged by ISA and saved to the configured REST backend when `tms-config.js` is valid.
+
+POD files are uploaded through the authenticated `/documents/` route and stored on the VPS. Their metadata remains in PostgreSQL table `business_documents`.
 
 ## PostgreSQL schema setup
 
@@ -178,6 +183,9 @@ Dock occupancy is derived from active dock assignments. Creating an active dock 
 - `scripts/`: browser JavaScript
 - `styles/`: page CSS
 - `sql/`: PostgreSQL schema and migration files
+- `server/`: loopback backend services
+- `deploy/`: nginx and systemd deployment templates
+- `tests/`: Node and Python automated tests
 - `data/`: tracked reference data and ignored local generated data
 
 See `docs/PROJECT_STRUCTURE.md` for where team members should add new files.

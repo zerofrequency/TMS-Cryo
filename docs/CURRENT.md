@@ -81,7 +81,9 @@ Current VPS components:
 - nginx serves `/var/www/tms/current`
 - `tms-login.service` handles the simple login page on local port `3100`
 - `tms-postgrest.service` exposes the PostgreSQL REST API on `127.0.0.1:3000`
+- `tms-documents.service` handles authenticated uploads on `127.0.0.1:3101`
 - PostgreSQL `tms` database runs on local port `5433`
+- uploaded documents live under `/var/lib/tms/documents`
 
 Runtime secrets and generated credentials live only on the VPS under `/etc/tms/` and must not be committed.
 
@@ -92,7 +94,7 @@ Keep GitHub as the code source of truth. Do not migrate the canonical Git reposi
 Recommended flow:
 
 1. Develop locally from `/Users/cryo/Documents/Codex/TMS/TMS-main`.
-2. Verify locally with `npm run dev`.
+2. Verify locally with `npm test` and `npm run dev`.
 3. Commit and push to GitHub `main`.
 4. Deploy to the VPS test environment with `npm run deploy:vps`.
 5. Check the running VPS environment with `npm run check:vps`.
@@ -106,5 +108,7 @@ npm run check:vps
 ```
 
 `npm run deploy:vps` publishes tracked static app files to a new `/var/www/tms/releases/<timestamp>` release and updates `/var/www/tms/current`. It preserves VPS-local `tms-config.js` and `map-config.js` from the previous current release.
+
+The deployment also installs the tracked document service and renders nginx from a secret-free template using the session token already stored under `/etc/tms`. It runs the full VPS health check after switching releases and restores the previous static release and nginx configuration if verification fails.
 
 `npm run backup:vps-db` downloads a PostgreSQL custom-format dump from the VPS into `outputs/backups/`, which is ignored by Git.

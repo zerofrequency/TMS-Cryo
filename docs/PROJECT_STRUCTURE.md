@@ -20,8 +20,11 @@ This repository is organized by browser entry points, page-specific assets, data
 - `outputs/`: local generated artifacts such as test data and one-off route cache packages.
 - `pages/`: secondary HTML pages.
 - `scripts/`: browser JavaScript files.
+- `server/`: loopback-only backend service source.
+- `deploy/`: systemd and nginx templates installed on the VPS.
 - `sql/`: PostgreSQL schema and migration SQL files.
 - `styles/`: CSS files.
+- `tests/`: Node and Python automated tests.
 
 ## Local-only files
 
@@ -45,6 +48,7 @@ Keep role task handoffs in `docs/tasks/` for local coordination only. Do not com
 
 - Add new pages to `pages/` unless they are primary root entry points.
 - Add page behavior to `scripts/`.
+- Add loopback backend services to `server/` and their runtime templates to `deploy/`.
 - Add page styling to `styles/`.
 - Add database changes to `sql/`.
 - Add contributor-facing documentation, requirements, setup guides, and planning notes to `docs/`.

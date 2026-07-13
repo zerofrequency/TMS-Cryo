@@ -1,0 +1,21 @@
+[Unit]
+Description=TMS Document Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+Environment=TMS_DOCUMENT_ROOT=/var/lib/tms/documents
+Environment=TMS_DOCUMENT_HOST=127.0.0.1
+Environment=TMS_DOCUMENT_PORT=3101
+ExecStart=/usr/bin/python3 /opt/tms/server/tms-documents-server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/tms/documents
+
+[Install]
+WantedBy=multi-user.target
