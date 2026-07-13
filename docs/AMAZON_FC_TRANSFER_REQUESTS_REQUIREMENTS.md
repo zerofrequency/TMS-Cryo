@@ -202,7 +202,7 @@ Recommended assets:
 ```text
 scripts/amazon-fc-transfer-requests.js
 styles/amazon-fc-transfer-requests.css
-sql/supabase-amazon-fc-transfer-requests-schema.sql
+sql/postgres-amazon-fc-transfer-requests-schema.sql
 ```
 
 ### Navigation

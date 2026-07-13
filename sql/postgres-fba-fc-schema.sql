@@ -1,5 +1,5 @@
 -- FBA FC base data and weekly appointment status for the hot FC dashboard.
--- Run this complete file in Supabase SQL Editor. Seed inserts are split into small chunks and deduplicated by FC.
+-- Run this complete file with psql against the TMS PostgreSQL database. Seed inserts are split into small chunks and deduplicated by FC.
 
 create table if not exists public.fba_fcs (
   fc text primary key,

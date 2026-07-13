@@ -7,7 +7,7 @@ The implementation should stay within the existing demo architecture:
 - Static HTML pages
 - Browser JavaScript
 - Existing CSS patterns
-- Supabase REST API
+- PostgREST API
 - No backend framework yet
 - No enterprise architecture refactor in this task
 
@@ -35,7 +35,7 @@ In the future enterprise model, billing should likely attach to a Shipment entit
 
 - New Carrier Billing page.
 - Carrier Billing navigation entry.
-- Supabase schema for carrier billing records.
+- PostgreSQL schema for carrier billing records.
 - List billing records.
 - Create billing record.
 - Edit billing record.
@@ -80,7 +80,7 @@ Recommended assets:
 ```text
 scripts/carrier-billing.js
 styles/carrier-billing.css
-sql/supabase-carrier-billing-schema.sql
+sql/postgres-carrier-billing-schema.sql
 ```
 
 The page should be reachable from:
@@ -90,7 +90,7 @@ The page should be reachable from:
 
 ## Data Model
 
-Create a Supabase table named:
+Create a PostgreSQL table named:
 
 ```text
 carrier_bills
@@ -131,7 +131,7 @@ carrier_bills_invoice_number_idx on invoice_number
 carrier_bills_due_date_idx on due_date
 ```
 
-For current demo use, follow the project's existing personal-use Supabase RLS pattern with anon read/write policies.
+For current demo use, follow the project's existing personal-use PostgREST role and PostgreSQL policy pattern.
 
 ## Billing Status
 
@@ -300,7 +300,7 @@ Updated At
 
 Expected:
 
-- Bill is saved in Supabase.
+- Bill is saved in PostgreSQL through the TMS API.
 - Bill appears in the list.
 - Total amount equals the sum of fee fields.
 - Linked Trip Plan is visible.
@@ -363,7 +363,7 @@ Expected:
 
 ### P0
 
-- Supabase schema
+- PostgreSQL schema
 - Carrier Billing page
 - Create/edit billing record
 - Link to Trip Plan

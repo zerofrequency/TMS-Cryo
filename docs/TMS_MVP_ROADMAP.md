@@ -260,7 +260,7 @@ Trailer and truck number requirement:
 ## Definition Of Done For TMS MVP
 
 - A product manager can run the full business flow without developer help.
-- A new team member can set up Supabase and load demo data using documented steps.
+- A new team member can set up PostgreSQL/PostgREST and load demo data using documented steps.
 - Every core flow has an acceptance checklist.
 - Critical business rules are enforced consistently.
 - Current demo limitations are documented.

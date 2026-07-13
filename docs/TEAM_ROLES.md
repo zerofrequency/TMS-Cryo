@@ -24,7 +24,7 @@ Responsibilities:
 - Build core TMS modules.
 - Implement database schema changes.
 - Maintain business rules and state transitions.
-- Handle Supabase integration.
+- Handle PostgreSQL, PostgREST, and TMS API integration.
 - Fix blocking workflow bugs.
 - Prepare future enterprise architecture migration.
 
@@ -66,7 +66,7 @@ Examples of suitable tasks:
 Out of scope:
 
 - Changing database schema.
-- Changing Supabase write logic.
+- Changing TMS API write logic.
 - Changing trip status rules.
 - Changing appointment merge logic.
 - Changing billing calculation rules.
@@ -106,7 +106,7 @@ Do not change:
 Role: UI Support Developer
 Area: Carrier Billing page
 Task: Adjust search and filter layout to match Trip Plans list page.
-Scope: UI only, no Supabase or billing calculation changes.
+Scope: UI only, no TMS API or billing calculation changes.
 Acceptance:
 - Search input and status filter align in one filter panel.
 - Buttons match existing TMS button styling.
@@ -128,7 +128,7 @@ Responsibilities:
 - Reproduce reported bugs with clear steps.
 - Identify affected pages, scripts, schemas, or data records.
 - Separate UI display bugs from business logic bugs.
-- Check browser console errors, failed network requests, and Supabase response errors.
+- Check browser console errors, failed network requests, and TMS API response errors.
 - Confirm whether a bug is caused by data, schema, state logic, UI rendering, or user workflow.
 - Write concise root-cause summaries.
 - Propose a minimal fix path and owner role.
@@ -139,7 +139,7 @@ Examples of suitable tasks:
 
 - A Trip Plan saves but does not appear in the list.
 - Carrier Billing total amount is wrong after editing a fee.
-- A Supabase table returns a permission or missing-column error.
+- A PostgREST table request returns a permission or missing-column error.
 - A filter works on one page but not another.
 - A resource appears occupied after it was released.
 - A page loads blank after a recent change.
@@ -210,7 +210,7 @@ Examples of suitable tasks:
 - Commit only documentation changes while leaving development code uncommitted.
 - Check whether Carrier Billing files are ready to commit as one feature.
 - Move a local task document to `docs/tasks/`.
-- Confirm `supabase-config.js` is not staged.
+- Confirm `tms-config.js` is not staged.
 - Review staged files before pushing.
 - Create a clear commit message for a completed task.
 - Report uncommitted files grouped by likely owner role.
@@ -227,7 +227,7 @@ Out of scope:
 Required working rules:
 
 - Never include unrelated changes in the same commit.
-- Never commit credentials, local Supabase keys, browser exports, or generated personal data.
+- Never commit credentials, local API tokens, browser exports, or generated personal data.
 - Never discard or revert another role's changes without explicit instruction.
 - Prefer small, readable commits with one purpose.
 - Before pushing, state what is being pushed and what is intentionally left local.

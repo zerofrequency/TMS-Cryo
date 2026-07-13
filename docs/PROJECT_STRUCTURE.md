@@ -8,7 +8,7 @@ This repository is organized by browser entry points, page-specific assets, data
 - `appts.html`: appointment manager page.
 - `README.md`: project overview, setup, and feature notes.
 - `CONTRIBUTING.md`: team workflow, branch naming, pull request expectations, and local setup rules.
-- `supabase-config.example.js`: safe template for local Supabase configuration.
+- `tms-config.example.js`: safe template for local TMS API configuration.
 - `map-config.example.js`: safe template for local map configuration.
 
 ## Directories
@@ -20,7 +20,7 @@ This repository is organized by browser entry points, page-specific assets, data
 - `outputs/`: local generated artifacts such as test data and one-off route cache packages.
 - `pages/`: secondary HTML pages.
 - `scripts/`: browser JavaScript files.
-- `sql/`: Supabase schema and migration SQL files.
+- `sql/`: PostgreSQL schema and migration SQL files.
 - `styles/`: CSS files.
 
 ## Local-only files
@@ -30,14 +30,14 @@ The following files may exist on a developer machine, but they are ignored and s
 - `.DS_Store`
 - `.env`
 - `.env.*`
-- `supabase-config.js`
+- `tms-config.js`
 - `map-config.js`
 - `data/carrier-appointments.json`
 - `docs/tasks/`
 - `outputs/`
 - imported `.csv`, `.xlsx`, and `.xls` files
 
-Keep `supabase-config.js` at the repository root because the browser pages load it from there. Do not move it into another folder.
+Keep `tms-config.js` at the repository root because the browser pages load it from there. Do not move it into another folder.
 Keep `map-config.js` at the repository root when using local map credentials. Do not commit it.
 Keep role task handoffs in `docs/tasks/` for local coordination only. Do not commit them.
 

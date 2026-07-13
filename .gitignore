@@ -5,6 +5,8 @@
 .env
 .env.*
 tms-config.js
+# Retired local config may still contain a legacy token.
+supabase-config.js
 map-config.js
 
 # Personal imported/exported data

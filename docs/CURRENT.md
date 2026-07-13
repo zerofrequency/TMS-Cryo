@@ -51,7 +51,7 @@ Do not commit or treat these as durable product docs:
 
 - `docs/tasks/`
 - `outputs/`
-- `supabase-config.js`
+- `tms-config.js`
 - `map-config.js`
 
 ## Current Dev Command
@@ -105,6 +105,6 @@ npm run backup:vps-db
 npm run check:vps
 ```
 
-`npm run deploy:vps` publishes tracked static app files to a new `/var/www/tms/releases/<timestamp>` release and updates `/var/www/tms/current`. It preserves VPS-local `supabase-config.js` and `map-config.js` from the previous current release.
+`npm run deploy:vps` publishes tracked static app files to a new `/var/www/tms/releases/<timestamp>` release and updates `/var/www/tms/current`. It preserves VPS-local `tms-config.js` and `map-config.js` from the previous current release.
 
 `npm run backup:vps-db` downloads a PostgreSQL custom-format dump from the VPS into `outputs/backups/`, which is ignored by Git.

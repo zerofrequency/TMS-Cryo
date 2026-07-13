@@ -1,5 +1,5 @@
 -- Restrict weekly FC appointment status to the four supported dashboard states.
--- Run this after supabase-fba-fc-schema.sql if the table already exists.
+-- Run this after postgres-fba-fc-schema.sql if the table already exists.
 
 update public.fc_weekly_appointments
 set appointment_status = null

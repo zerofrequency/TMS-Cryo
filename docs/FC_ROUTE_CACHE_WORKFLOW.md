@@ -34,9 +34,9 @@ Do not store route polylines directly in `public.fba_fcs`. Routes depend on orig
 
 Merged project files:
 
-- `sql/supabase-fba-fc-schema.sql`: owns the FC base table, weekly FC appointment table, and route cache table schema.
-- `sql/supabase-fba-fc-final-data-update-2026-06-02.sql`: replays the final 212-row FC address, coordinate, and `transit_days` update.
-- `sql/supabase-fba-fc-legal-transit-hours-update-2026-06-02.sql`: adds and fills `legal_transit_hours`.
+- `sql/postgres-fba-fc-schema.sql`: owns the FC base table, weekly FC appointment table, and route cache table schema.
+- `sql/postgres-fba-fc-final-data-update-2026-06-02.sql`: replays the final 212-row FC address, coordinate, and `transit_days` update.
+- `sql/postgres-fba-fc-legal-transit-hours-update-2026-06-02.sql`: adds and fills `legal_transit_hours`.
 - `docs/FC_ROUTE_CACHE_WORKFLOW.md`: explains the workflow and artifact purpose.
 
 Local generated artifacts:
@@ -64,9 +64,9 @@ Important files:
 
 These files are generated artifacts and should stay local unless a reviewer explicitly asks to publish them.
 
-## Supabase Update Status
+## Legacy Update Status
 
-The 2026-06-02 update was applied through Supabase REST:
+The 2026-06-02 update was originally applied through the legacy Supabase REST endpoint before the VPS migration:
 
 - `public.fba_fcs`: 212 FC rows updated.
 - `public.fba_fc_route_cache`: 212 route rows uploaded.

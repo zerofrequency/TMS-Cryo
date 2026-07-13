@@ -148,7 +148,7 @@ Toolbar rules:
 - Search and filter layouts use the shared top toolbar pattern and do not shift unpredictably between pages.
 - Common statuses use a shared visual language.
 - Mobile and narrow desktop layouts do not overflow.
-- No business logic, Supabase write behavior, or schema is changed as part of UI standardization.
+- No business logic, TMS API write behavior, or schema is changed as part of UI standardization.
 
 ## Enterprise Readiness Acceptance Criteria
 

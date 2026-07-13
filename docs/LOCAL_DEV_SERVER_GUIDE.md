@@ -12,7 +12,7 @@ Opening pages with `file://` can trigger browser security restrictions, includin
 - Inconsistent script loading.
 - CORS-like restrictions.
 - Storage/API behavior differences.
-- Supabase config loading issues.
+- TMS API config loading issues.
 - Map or document preview issues.
 - Future module/import limitations.
 

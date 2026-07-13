@@ -7,15 +7,15 @@ Use this checklist to verify that the current TMS demo can run the core business
 - Start the local development server from the project root with `python3 -m http.server 5173`.
 - Open `http://127.0.0.1:5173/`.
 - Confirm the navigation shows Home, Appt, Trip Plans, and Resources.
-- Confirm `supabase-config.js` exists locally and contains a valid Supabase URL and anon key.
-- Confirm required SQL files have been run in Supabase:
-  - `sql/supabase-schema.sql`
-  - `sql/supabase-fba-fc-schema.sql`
-  - `sql/supabase-trip-plans-schema.sql`
-  - `sql/supabase-isa-binding-schema.sql`
-  - `sql/supabase-resources-schema.sql`
-  - `sql/supabase-crew-slots-migration.sql`
-  - `sql/supabase-fleet-capacity-migration.sql`
+- Confirm `tms-config.js` exists locally and follows `tms-config.example.js`.
+- Confirm required SQL files have been run in the active PostgreSQL database:
+  - `sql/postgres-schema.sql`
+  - `sql/postgres-fba-fc-schema.sql`
+  - `sql/postgres-trip-plans-schema.sql`
+  - `sql/postgres-isa-binding-schema.sql`
+  - `sql/postgres-resources-schema.sql`
+  - `sql/postgres-crew-slots-migration.sql`
+  - `sql/postgres-fleet-capacity-migration.sql`
 
 ## Flow 1: Appointment Import
 
@@ -118,7 +118,7 @@ Create a trip plan from one or more appointments.
 
 ### Expected Results
 
-- The trip plan is saved to Supabase.
+- The trip plan is saved through the TMS API to PostgreSQL.
 - Stops are saved in the correct order.
 - Appointment ISA stops show appointment-derived destination and schedule data.
 - Buffer is calculated for each stop using `fba_fcs.legal_transit_hours` for known FC destinations.
@@ -296,9 +296,9 @@ Review trip status, stop details, countdown, and change log.
 
 These are expected gaps in the current demo and should not block demo acceptance:
 
-- No formal login or enterprise permission model.
-- Browser directly writes to Supabase.
-- No backend API layer.
+- Only a simple single-user login; no enterprise identity or permission model.
+- Browser data access uses the shared TMS API client and PostgREST.
+- No custom business API layer for server-side workflow validation.
 - No full audit log table.
 - No import preview or approval flow.
 - No shipment entity separate from trip plan.

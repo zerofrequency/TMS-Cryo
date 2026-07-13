@@ -10,7 +10,7 @@ Product Manager
 
 Inventory is the next module after the current TMS flow. The first version should manage inventory at the single shipment/ticket level. Each inventory record represents one operational inventory unit that can later connect to trip planning, warehouse handling, and WMS workflows.
 
-The MVP should stay lightweight and fit the current static HTML, browser JavaScript, and Supabase REST architecture.
+The MVP should stay lightweight and fit the current static HTML, browser JavaScript, and PostgREST architecture.
 
 Enterprise WMS architecture direction is documented separately:
 
@@ -26,7 +26,7 @@ Create an Inventory module that lets operators create, review, search, update, a
 
 - Inventory navigation entry.
 - Inventory page.
-- Supabase schema for inventory records.
+- PostgreSQL schema for inventory records.
 - Create inventory record.
 - Edit inventory record.
 - List inventory records.
@@ -274,7 +274,7 @@ Recommended assets:
 ```text
 scripts/inventory.js
 styles/inventory.css
-sql/supabase-inventory-schema.sql
+sql/postgres-inventory-schema.sql
 ```
 
 ### Navigation

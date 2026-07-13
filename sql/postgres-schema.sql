@@ -23,7 +23,7 @@ create index if not exists appointments_status_idx on public.appointments (statu
 alter table public.appointments enable row level security;
 
 -- Personal-use policy for direct browser access with the anon key.
--- Tighten this later when you add Supabase Auth.
+-- Tighten this when the MVP gains role-based server authentication.
 drop policy if exists "personal anon read appointments" on public.appointments;
 drop policy if exists "personal anon write appointments" on public.appointments;
 

@@ -8,7 +8,7 @@ Product Manager and Core Developer
 
 ## Background
 
-The current TMS demo is a static browser application that directly calls Supabase and stores significant business behavior in frontend scripts. This is acceptable for the current demo, but the MVP and future enterprise product need a clearer separation between user interface, business rules, persistence, audit, and permissions.
+The current TMS demo is a static browser application that calls PostgREST through a shared TMS API client and stores significant business behavior in frontend scripts. This is acceptable for the current MVP, but the future enterprise product needs a clearer separation between user interface, business rules, persistence, audit, and permissions.
 
 This document defines the preparation direction. It does not approve a full rewrite yet.
 
@@ -18,15 +18,15 @@ Preserve the current working demo while preparing the codebase for a future ente
 
 - Frontend owns presentation, interaction, and client-side workflow guidance.
 - Backend APIs own persistence, validation, authorization, audit, and integration with external systems.
-- Supabase is accessed through controlled service boundaries instead of direct browser writes.
+- PostgreSQL is accessed through controlled service boundaries instead of exposing database credentials to the browser.
 
 ## Current State
 
 - HTML pages are served as static files.
-- Browser scripts call Supabase directly.
+- Browser scripts call PostgREST through `scripts/tms-api.js`.
 - Local IndexedDB is used as fallback for appointment storage.
 - Business rules are distributed across frontend scripts.
-- There is no formal authentication, permission model, backend API layer, or audit service.
+- The VPS has a simple single-user login, but no enterprise permission model, custom business API, or audit service.
 
 ## MVP Boundary Direction
 
@@ -34,7 +34,7 @@ For MVP, do not stop development to perform a full rewrite. Instead:
 
 - Keep current pages working.
 - Isolate data access behind frontend module functions where practical.
-- Document direct Supabase call sites.
+- Keep data access centralized in the shared TMS API client.
 - Avoid adding new business rules deeply inside rendering code.
 - Keep product rules explicit in docs and task handoffs.
 - Add UI states that can later map to backend API success, validation, and error responses.
@@ -98,7 +98,7 @@ See:
 
 ## Recommended Migration Order
 
-1. Document current direct Supabase usage and API contract draft.
+1. Maintain the shared TMS API contract and remove page-level request duplication.
 2. Standardize UI states so backend errors can be displayed consistently.
 3. Wrap one low-risk module's data access behind a frontend API adapter.
 4. Move high-risk business rules to backend endpoints only after contracts are clear.

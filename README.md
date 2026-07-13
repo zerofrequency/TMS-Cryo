@@ -78,40 +78,41 @@ Use the table/calendar switch above the appointment list to change views. The ca
 
 Use the time toggle above the appointment list to switch the table, calendar, and timeline between appointment time and latest departure time. Latest departure is calculated from the appointment time minus `fba_fcs.legal_transit_hours`, so dispatch planning can sort and group by the latest compliant loading/departure deadline.
 
-Use **Add Manually** to create or update a single appointment by ISA. Manual entries merge by `ISA` and save to Supabase or the local backup just like CSV/XLSX imports.
+Use **Add Manually** to create or update a single appointment by ISA. Manual entries merge by `ISA` and save through the TMS API or to the local backup just like CSV/XLSX imports.
 
 ## Storage
 
 The current deployed MVP uses PostgreSQL on `vps-sh` through PostgREST. The previous Supabase project is retained as a legacy backup, not the primary database.
 
-For local browser testing, copy `supabase-config.example.js` to `supabase-config.js`, then point it at the active REST API and public/anon token for the environment you are testing.
+For local browser testing, copy `tms-config.example.js` to `tms-config.js`, then point it at the active REST API and public/anon token for the environment you are testing.
 
 If the REST config is not configured or unavailable, the appointment page can use local `IndexedDB` as a backup.
 
-CSV/XLSX uploads are merged by ISA and saved to the configured REST backend when `supabase-config.js` is valid.
+CSV/XLSX uploads are merged by ISA and saved to the configured REST backend when `tms-config.js` is valid.
 
 ## PostgreSQL schema setup
 
-The SQL files under `sql/` are PostgreSQL schema/migration files. Their names still use the historical `supabase-*` prefix, but the active MVP database is PostgreSQL on `vps-sh`.
+The SQL files under `sql/` are PostgreSQL schema and migration files with a `postgres-*` prefix.
 
-Run `sql/supabase-schema.sql` before syncing appointments. Run `sql/supabase-fba-fc-schema.sql` to add the FBA FC base data, weekly FC appointment table, and persisted FC route cache table. Run `sql/supabase-trip-plans-schema.sql` before saving trip plans.
+Run `sql/postgres-schema.sql` before syncing appointments. Run `sql/postgres-fba-fc-schema.sql` to add the FBA FC base data, weekly FC appointment table, and persisted FC route cache table. Run `sql/postgres-trip-plans-schema.sql` before saving trip plans.
 
-Run `sql/supabase-resources-schema.sql` to add Carrier, Dock, and Loading Crew resource tables plus their assignment tables.
+Run `sql/postgres-resources-schema.sql` to add Carrier, Dock, and Loading Crew resource tables plus their assignment tables.
 
-Run `sql/supabase-fba-fc-final-data-update-2026-06-02.sql` to reapply the latest 212-row FC address, coordinate, and route-duration update if the `fba_fcs` data needs to be restored. Run `sql/supabase-fba-fc-legal-transit-hours-update-2026-06-02.sql` to add and fill the FMCSA-style `legal_transit_hours` planning estimate.
+Run `sql/postgres-fba-fc-final-data-update-2026-06-02.sql` to reapply the latest 212-row FC address, coordinate, and route-duration update if the `fba_fcs` data needs to be restored. Run `sql/postgres-fba-fc-legal-transit-hours-update-2026-06-02.sql` to add and fill the FMCSA-style `legal_transit_hours` planning estimate.
 
-Create and edit local `supabase-config.js` for the API endpoint you are testing:
+Create and edit local `tms-config.js` for the API endpoint you are testing:
 
 ```js
-window.CARRIER_APPT_SUPABASE = {
-  url: "http://127.0.0.1:5173",
-  anonKey: "paste local API token here",
+window.TMS_CONFIG = {
+  apiBaseUrl: "",
+  apiToken: "",
+  documentBaseUrl: "/documents",
 };
 ```
 
-Do not use the `service_role` key in this file.
+Leave `apiBaseUrl` and `apiToken` empty for the same-origin VPS deployment. Never put a PostgreSQL password or privileged PostgREST token in browser configuration.
 
-For team development, each developer should create their own local `supabase-config.js`. This file is ignored by Git and must not be shared in commits.
+For team development, each developer should create their own local `tms-config.js`. This file is ignored by Git and must not be shared in commits.
 
 ## Route map setup
 
@@ -176,7 +177,7 @@ Dock occupancy is derived from active dock assignments. Creating an active dock 
 - `pages/`: secondary HTML pages
 - `scripts/`: browser JavaScript
 - `styles/`: page CSS
-- `sql/`: Supabase schema files
+- `sql/`: PostgreSQL schema and migration files
 - `data/`: tracked reference data and ignored local generated data
 
 See `docs/PROJECT_STRUCTURE.md` for where team members should add new files.

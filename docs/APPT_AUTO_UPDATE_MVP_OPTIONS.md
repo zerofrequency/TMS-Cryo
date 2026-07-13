@@ -39,7 +39,7 @@ Why this is recommended:
 - Uses existing browser login session.
 - No password storage.
 - No backend required.
-- Works with the current static HTML + Supabase app.
+- Works with the current static HTML + TMS API app.
 - Lowest implementation risk.
 
 Limitations:

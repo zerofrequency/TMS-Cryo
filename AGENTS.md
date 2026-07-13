@@ -2,7 +2,7 @@
 
 ## Project
 
-Personal Carrier Appointment Manager / TMS demo for appointments, trip plans, resources, FC data, routing, and Supabase-backed workflows.
+Personal Carrier Appointment Manager / TMS demo for appointments, trip plans, resources, FC data, routing, and PostgreSQL-backed workflows.
 
 ## Start Here
 
@@ -53,7 +53,7 @@ Use persistent role threads only for genuinely long-running coordination.
 
 - `docs/tasks/`
 - `outputs/`
-- `supabase-config.js`
+- `tms-config.js`
 - `map-config.js`
 - downloaded Carrier Central files
 - browser-generated local files
@@ -83,4 +83,4 @@ Update `docs/tasks/<date>-<task>.md` or another task handoff when:
 
 ## Secrets
 
-Never commit Supabase service role keys, Mapbox/OpenRouteService tokens, or local config files. `supabase-config.js` and `map-config.js` are local-only.
+Never commit PostgreSQL credentials, privileged API tokens, Mapbox/OpenRouteService tokens, or local config files. `tms-config.js` and `map-config.js` are local-only.

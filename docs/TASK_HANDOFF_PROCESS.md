@@ -123,7 +123,7 @@ Implementation guidance, constraints, and known risks.
 Use Core Developer for tasks involving:
 
 - Database schema
-- Supabase reads or writes
+- TMS API reads or writes
 - Business rules
 - State transitions
 - Calculations
@@ -155,7 +155,7 @@ Use Debug Specialist for tasks involving:
 - Bug reproduction
 - Root-cause diagnosis
 - Browser console or network error investigation
-- Supabase error investigation
+- TMS API or PostgREST error investigation
 - Data mismatch investigation
 - Regression checks after a fix
 - Known issue documentation

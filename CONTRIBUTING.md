@@ -59,7 +59,7 @@ Each pull request should include:
 
 - What changed
 - How it was tested
-- Any Supabase SQL that must be run
+- Any PostgreSQL SQL that must be run
 - Any manual setup needed by other developers
 
 Keep pull requests focused. Separate schema changes, UI changes, and large data changes when practical.
@@ -69,24 +69,24 @@ Keep pull requests focused. Separate schema changes, UI changes, and large data 
 Create local configuration from the example:
 
 ```sh
-cp supabase-config.example.js supabase-config.js
+cp tms-config.example.js tms-config.js
 ```
 
-Put only the Supabase project URL and anon public key in `supabase-config.js`.
+Use `apiBaseUrl`, optional `apiToken`, and `documentBaseUrl` from `tms-config.example.js`. The VPS uses same-origin routes and does not need a browser token.
 
 Never commit:
 
-- `supabase-config.js`
+- `tms-config.js`
 - `.env` or `.env.*`
 - imported Carrier Central exports
 - local appointment backup data
 - `.DS_Store`
 
-The Supabase `service_role` key must never be used in browser code.
+PostgreSQL passwords and privileged PostgREST tokens must never be used in browser code.
 
 ## Database changes
 
-Supabase schema files live in `sql/`. When changing tables or constraints:
+PostgreSQL schema and migration files live in `sql/`. When changing tables or constraints:
 
 - Add or update the relevant SQL file.
 - Mention the required SQL file in the pull request.
