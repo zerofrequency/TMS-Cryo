@@ -2084,6 +2084,25 @@ tbody tr.selected {
     max-height: none;
   }
 
+  .calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .calendar-toolbar strong {
+    text-align: left;
+  }
+
+  .calendar-subviews {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-self: stretch;
+  }
+
+  .calendar-subview-button {
+    min-width: 0;
+  }
+
   .timeline-view {
     max-height: 70vh;
   }
