@@ -16,6 +16,7 @@ systemctl is-active postgresql@16-main
 
 echo '== ports =='
 ss -ltnup | grep -E '(:80|:443|:3478|:3000|:3100|:$DB_PORT)' || true
+ss -ltnp | grep -q '127.0.0.1:3000' || { echo 'PostgREST must listen on 127.0.0.1:3000 only'; exit 1; }
 
 echo '== database =='
 pg_lsclusters | sed -n '1,5p'

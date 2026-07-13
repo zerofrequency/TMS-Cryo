@@ -49,7 +49,7 @@ The VPS deployment is a test/showcase environment:
 - nginx serves the app on port `80`
 - DERP remains the primary VPS service on HTTPS `443`; do not move DERP for TMS
 - `tms-login.service` handles the simple login page on local port `3100`
-- `tms-postgrest.service` exposes the PostgreSQL REST API on local port `3000`
+- `tms-postgrest.service` exposes the PostgreSQL REST API on `127.0.0.1:3000`
 - PostgreSQL database `tms` runs locally on port `5433`
 
 Back up the VPS database before risky data or schema work:

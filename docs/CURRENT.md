@@ -80,7 +80,7 @@ Current VPS components:
 
 - nginx serves `/var/www/tms/current`
 - `tms-login.service` handles the simple login page on local port `3100`
-- `tms-postgrest.service` exposes the PostgreSQL REST API on port `3000`
+- `tms-postgrest.service` exposes the PostgreSQL REST API on `127.0.0.1:3000`
 - PostgreSQL `tms` database runs on local port `5433`
 
 Runtime secrets and generated credentials live only on the VPS under `/etc/tms/` and must not be committed.
