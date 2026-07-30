@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-vps-sh}"
+SSH_HOST="${SSH_HOST:-vps-ca}"
 DB_NAME="${DB_NAME:-tms}"
 DB_PORT="${DB_PORT:-5433}"
 BACKUP_DIR="${BACKUP_DIR:-outputs/backups}"

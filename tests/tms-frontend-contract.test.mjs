@@ -113,3 +113,37 @@ test("VPS listener checks do not fail under pipefail when grep exits early", asy
   assert.doesNotMatch(content, /ss -ltnp \| grep -q/);
   assert.doesNotMatch(content, /ss -lunp \| grep -q/);
 });
+
+test("VPS listener checks can skip DERP requirements for non-DERP targets", async () => {
+  const content = await source("scripts/check-vps.sh");
+
+  assert.match(content, /EXPECT_DERP="\$\{EXPECT_DERP:-0\}"/);
+  assert.match(content, /systemctl is-active derper/);
+  assert.match(content, /if \[\[ "\$EXPECT_DERP" == "1" \]\]/);
+  assert.match(content, /DERP TCP 443 listener is missing/);
+  assert.match(content, /DERP UDP 3478 listener is missing/);
+});
+
+test("VPS operational scripts default to the current vps-ca deployment", async () => {
+  for (const path of ["scripts/deploy-vps.sh", "scripts/check-vps.sh", "scripts/backup-vps-db.sh"]) {
+    const content = await source(path);
+    assert.match(content, /SSH_HOST="\$\{SSH_HOST:-vps-ca\}"/, `${path} must default to vps-ca`);
+  }
+});
+
+test("VPS deploy replaces a restored current directory with the release symlink", async () => {
+  const content = await source("scripts/deploy-vps.sh");
+
+  assert.match(content, /if \[\[ -d "\$current_link" && ! -L "\$current_link" \]\]/);
+  assert.match(content, /rm -rf "\$current_link"/);
+  assert.match(content, /ln -sfn '\$REMOTE_RELEASE' '\$REMOTE_CURRENT'/);
+});
+
+test("VPS health check asserts login and authenticated home status codes", async () => {
+  const content = await source("scripts/check-vps.sh");
+
+  assert.match(content, /login_status="\$\(curl/);
+  assert.match(content, /\[\[ "\$login_status" == "200" \]\]/);
+  assert.match(content, /home_status="\$\(curl/);
+  assert.match(content, /\[\[ "\$home_status" == "200" \]\]/);
+});

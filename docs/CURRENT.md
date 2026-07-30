@@ -68,13 +68,13 @@ http://127.0.0.1:5173/
 
 ## VPS Test Deployment
 
-The current test deployment runs on `vps-sh`:
+The current test deployment runs on `vps-ca`:
 
 ```text
 http://tms.zefanlong.space
 ```
 
-The VPS's primary service is DERP on HTTPS `443`; do not move or replace DERP for TMS. TMS is an HTTP-only test site on nginx port `80`.
+TMS is an HTTP test site served by nginx on port `80`.
 
 Current VPS components:
 

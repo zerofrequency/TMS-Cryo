@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-vps-sh}"
+SSH_HOST="${SSH_HOST:-vps-ca}"
 PUBLIC_URL="${PUBLIC_URL:-http://tms.zefanlong.space}"
 DB_NAME="${DB_NAME:-tms}"
 DB_PORT="${DB_PORT:-5433}"
+EXPECT_DERP="${EXPECT_DERP:-0}"
 
-ssh "$SSH_HOST" bash -s -- "$PUBLIC_URL" "$DB_NAME" "$DB_PORT" <<'REMOTE_CHECK'
+ssh "$SSH_HOST" bash -s -- "$PUBLIC_URL" "$DB_NAME" "$DB_PORT" "$EXPECT_DERP" <<'REMOTE_CHECK'
 set -euo pipefail
 
 PUBLIC_URL="$1"
 DB_NAME="$2"
 DB_PORT="$3"
+EXPECT_DERP="$4"
 
 echo '== services =='
-systemctl is-active derper
+if [[ "$EXPECT_DERP" == "1" ]]; then
+  systemctl is-active derper
+fi
 systemctl is-active nginx
 systemctl is-active tms-login
 systemctl is-active tms-postgrest
@@ -31,8 +35,10 @@ if grep -Eq '(0\.0\.0\.0|\[::\]|\*):3101' <<< "$tcp_listeners"; then
   echo 'Document service must not listen publicly on port 3101'
   exit 1
 fi
-[[ "$tcp_listeners" == *':443'* ]] || { echo 'DERP TCP 443 listener is missing'; exit 1; }
-[[ "$udp_listeners" == *':3478'* ]] || { echo 'DERP UDP 3478 listener is missing'; exit 1; }
+if [[ "$EXPECT_DERP" == "1" ]]; then
+  [[ "$tcp_listeners" == *':443'* ]] || { echo 'DERP TCP 443 listener is missing'; exit 1; }
+  [[ "$udp_listeners" == *':3478'* ]] || { echo 'DERP UDP 3478 listener is missing'; exit 1; }
+fi
 
 echo '== database =='
 pg_lsclusters | sed -n '1,5p'
@@ -56,7 +62,9 @@ printf '%%PDF-1.7\nTMS health check\n' > "$PDF"
 
 echo '== http flow =='
 printf 'login_page='
-curl --noproxy '*' --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}\n' "$PUBLIC_URL/login.html"
+login_status="$(curl --noproxy '*' --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}' "$PUBLIC_URL/login.html")"
+echo "$login_status"
+[[ "$login_status" == "200" ]]
 printf 'home_without_cookie='
 curl --noproxy '*' --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code} %{redirect_url}\n' "$PUBLIC_URL/"
 printf 'document_without_cookie='
@@ -66,7 +74,9 @@ echo "$anonymous_document_status"
 printf 'login_post='
 curl --noproxy '*' -c "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code} %{redirect_url}\n' -X POST -d "username=tms&password=$PASS" "$PUBLIC_URL/auth/login"
 printf 'home_with_cookie='
-curl --noproxy '*' -b "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}\n' "$PUBLIC_URL/"
+home_status="$(curl --noproxy '*' -b "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}' "$PUBLIC_URL/")"
+echo "$home_status"
+[[ "$home_status" == "200" ]]
 printf 'config_with_cookie='
 config_status="$(curl --noproxy '*' -b "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}' "$PUBLIC_URL/tms-config.js")"
 echo "$config_status"
@@ -75,6 +85,10 @@ printf 'api_with_cookie='
 api_status="$(curl --noproxy '*' -b "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}' "$PUBLIC_URL/rest/v1/appointments?select=isa&limit=1")"
 echo "$api_status"
 [[ "$api_status" == "200" ]]
+printf 'poster_template_with_cookie='
+poster_template_status="$(curl --noproxy '*' -b "$JAR" --output /dev/null --silent --show-error --max-time 10 --write-out '%{http_code}' "$PUBLIC_URL/assets/posters/hye-amazon-appointment-template.jpg")"
+echo "$poster_template_status"
+[[ "$poster_template_status" == "200" ]]
 
 echo '== document flow =='
 upload_status="$(curl --noproxy '*' -b "$JAR" --output "$META" --silent --show-error --max-time 10 --write-out '%{http_code}' \

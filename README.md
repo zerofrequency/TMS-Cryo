@@ -34,7 +34,7 @@ See `docs/LOCAL_DEV_SERVER_GUIDE.md` for the full local testing workflow.
 
 ## MVP development and VPS deployment
 
-GitHub remains the code source of truth. Develop locally on the Mac, commit and push to `main`, then deploy the static app to the `vps-sh` test environment.
+GitHub remains the code source of truth. Develop locally on the Mac, commit and push to `main`, then deploy the static app to the `vps-ca` test environment.
 
 ```sh
 npm run dev
@@ -48,7 +48,6 @@ The VPS deployment is a test/showcase environment:
 - Public URL: `http://tms.zefanlong.space`
 - Static files: `/var/www/tms/current`
 - nginx serves the app on port `80`
-- DERP remains the primary VPS service on HTTPS `443`; do not move DERP for TMS
 - `tms-login.service` handles the simple login page on local port `3100`
 - `tms-postgrest.service` exposes the PostgreSQL REST API on `127.0.0.1:3000`
 - `tms-documents.service` stores authenticated POD uploads on `127.0.0.1:3101`
@@ -85,7 +84,7 @@ Use **Add Manually** to create or update a single appointment by ISA. Manual ent
 
 ## Storage
 
-The current deployed MVP uses PostgreSQL on `vps-sh` through PostgREST. The previous Supabase project is retained as a legacy backup, not the primary database.
+The current deployed MVP uses PostgreSQL on `vps-ca` through PostgREST. The previous Supabase project is retained as a legacy backup, not the primary database.
 
 For local browser testing, copy `tms-config.example.js` to `tms-config.js`, then set an explicit API base and optional generic token only when testing against a non-same-origin PostgREST environment.
 

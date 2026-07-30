@@ -39,6 +39,7 @@
     saveStatusButton: document.getElementById("saveStatusButton"),
     listViewButton: document.getElementById("listViewButton"),
     mapViewButton: document.getElementById("mapViewButton"),
+    exportPosterButton: document.getElementById("exportPosterButton"),
     listView: document.getElementById("listView"),
     mapView: document.getElementById("mapView"),
     fcRows: document.getElementById("fcRows"),
@@ -90,6 +91,7 @@
     els.saveStatusButton.addEventListener("click", saveWeeklyStatus);
     els.listViewButton.addEventListener("click", () => setView("list"));
     els.mapViewButton.addEventListener("click", () => setView("map"));
+    els.exportPosterButton.addEventListener("click", exportWeeklyPoster);
     els.zoomInButton.addEventListener("click", () => changeMapZoom(1.18));
     els.zoomOutButton.addEventListener("click", () => changeMapZoom(1 / 1.18));
     els.zoomResetButton.addEventListener("click", resetMapZoom);
@@ -163,6 +165,36 @@
     } catch (error) {
       console.error(error);
       setCloudStatus(error.message, "error");
+    }
+  }
+
+  async function exportWeeklyPoster() {
+    const rows = allFcRows().filter((fc) => clean(fc.appointment_status));
+    if (!rows.length) {
+      setCloudStatus("No weekly FC statuses to export", "error");
+      return;
+    }
+    if (!window.FcPosterExport || !window.US_STATES_CONTIGUOUS) {
+      setCloudStatus("Poster exporter is unavailable", "error");
+      return;
+    }
+
+    const originalLabel = els.exportPosterButton.textContent;
+    els.exportPosterButton.disabled = true;
+    els.exportPosterButton.textContent = "Exporting...";
+    try {
+      const model = await window.FcPosterExport.downloadPoster({
+        rows,
+        weekStart: selectedWeekStart(),
+        geojson: window.US_STATES_CONTIGUOUS,
+      });
+      setCloudStatus(`Exported ${model.total} FCs`, "connected");
+    } catch (error) {
+      console.error(error);
+      setCloudStatus(error.message, "error");
+    } finally {
+      els.exportPosterButton.disabled = false;
+      els.exportPosterButton.textContent = originalLabel;
     }
   }
 

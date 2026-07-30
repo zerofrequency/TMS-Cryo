@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SSH_HOST="${SSH_HOST:-vps-sh}"
+SSH_HOST="${SSH_HOST:-vps-ca}"
 PUBLIC_URL="${PUBLIC_URL:-http://tms.zefanlong.space}"
 REMOTE_BASE="${REMOTE_BASE:-/var/www/tms}"
 REMOTE_RELEASES="$REMOTE_BASE/releases"
@@ -26,6 +26,8 @@ RSYNC_ARGS=(
   --exclude=*.xls
   --include=/data/
   --include=/data/***
+  --include=/assets/
+  --include=/assets/***
   --include=/pages/
   --include=/pages/***
   --include=/scripts/
@@ -116,6 +118,10 @@ else
 fi
 if [[ -f "$current_link/map-config.js" ]]; then
   cp "$current_link/map-config.js" "$release_dir/map-config.js"
+fi
+
+if [[ -d "$current_link" && ! -L "$current_link" ]]; then
+  rm -rf "$current_link"
 fi
 
 chown -R www-data:www-data "$base_dir"
